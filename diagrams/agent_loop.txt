@@ -1,0 +1,3 @@
+User → Agent → Check Cache? → [Hit: Use cached] / [Miss: Call MCP → Store in Cache]
+  ↓
+Memory (checkpointer) remembers conversation history
