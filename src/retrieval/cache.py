@@ -8,8 +8,7 @@ import numpy as np
 from chromadb.config import Settings
 
 """
-We store:
-
+We store:  
 metadata = {
     "query": query,
     "created_at": now,
@@ -66,16 +65,13 @@ class VectorCache:
         # LRU applies ONLY to query cache
         self._lru: OrderedDict[str, float] = OrderedDict()
 
-    # ============================================================
+    
     # QUERY CACHE (coarse-grained)
-    # ============================================================
 
-    def search_query(
-        self, query_embedding: np.ndarray
-    ) -> Optional[Tuple[str, Dict[str, Any], float]]:
+    def search_query(self,query_embedding: np.ndarray, max_candidates: int = 3,) -> Optional[Tuple[str, Dict[str, Any], float]]:
         """
-        Check if a semantically similar query already exists.
-        Returns (cache_id, payload, similarity) on hit.
+        Search for a reusable cached query.
+        Tries up to max_candidates in descending similarity order.
         """
 
         if self.query_collection.count() == 0:
@@ -83,27 +79,27 @@ class VectorCache:
 
         results = self.query_collection.query(
             query_embeddings=[query_embedding.tolist()],
-            n_results=1,
+            n_results=max_candidates,
             include=["ids", "metadatas", "distances"],
         )
 
-        if not results["ids"][0]:
-            return None
+        for cache_id, metadata, dist in zip(results["ids"][0],results["metadatas"][0],results["distances"][0],):
+            similarity = 1.0 - dist
 
-        cache_id = results["ids"][0][0]
-        metadata = results["metadatas"][0][0]
-        distance = results["distances"][0][0]
-        similarity = 1.0 - distance
+            #  Monotonic similarity: safe early stop
+            if similarity < self.similarity_threshold:
+                break
 
-        if similarity < self.similarity_threshold:
-            return None
+            #  Expired → delete and try next
+            if self._is_expired(metadata):
+                self._delete_query(cache_id)
+                continue
 
-        if self._is_expired(metadata):
-            self._delete_query(cache_id)
-            return None
+            # Valid hit
+            self._touch(cache_id)
+            return cache_id, metadata["payload"], similarity
 
-        self._touch(cache_id)
-        return cache_id, metadata["payload"], similarity
+        return None
 
     def add_query(
         self,
