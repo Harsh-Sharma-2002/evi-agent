@@ -7,7 +7,23 @@ import chromadb
 import numpy as np
 from chromadb.config import Settings
 
+"""
+We store:
 
+metadata = {
+    "query": query,
+    "created_at": now,
+    "payload": payload,
+}
+
+
+But on access, you don’t update metadata in Chroma, only _lru.
+If ever persist Chroma later, LRU state won't survive restarts
+That's OK for a cache (not a database)
+No action needed unless want persistence later.
+"""
+
+##############################################
 class VectorCache:
     """
     Hybrid vector memory:
@@ -148,13 +164,21 @@ class VectorCache:
         self,
         query_embedding: np.ndarray,
         k: int = 8,
-    ) -> List[Dict[str, Any]]:
+        similarity_threshold: Optional[float] = None,
+        min_chunks: int = 1,
+        ) -> List[Dict[str, Any]]:
         """
-        Retrieve top-k semantically relevant chunks with diversity control.
+        Retrieve top-k semantically relevant chunks with:
+        - early exit on similarity drop
+        - optional per-call similarity threshold
+        - per-document diversity control
+        - minimum chunk guard for agent routing
         """
 
         if self.chunk_collection.count() == 0:
             return []
+
+        threshold = similarity_threshold or self.similarity_threshold
 
         results = self.chunk_collection.query(
             query_embeddings=[query_embedding.tolist()],
@@ -165,14 +189,12 @@ class VectorCache:
         per_doc_counter = defaultdict(int)
         selected: List[Dict[str, Any]] = []
 
-        for text, meta, dist in zip(
-            results["documents"][0],
-            results["metadatas"][0],
-            results["distances"][0],
-        ):
+        for text, meta, dist in zip(results["documents"][0],results["metadatas"][0],results["distances"][0],):
             similarity = 1.0 - dist
-            if similarity < self.similarity_threshold:
-                continue
+
+            # EARLY EXIT 
+            if similarity < threshold:
+                break
 
             pmid = meta.get("pmid")
             if pmid is None:
@@ -185,12 +207,17 @@ class VectorCache:
             selected.append(
                 {
                     "text": text,
-                    "metadata": meta,
+                     "metadata": meta,
                     "similarity": similarity,
                 }
             )
 
+    #  MINIMUM EVIDENCE GUARD (agent-friendly)
+        if len(selected) < min_chunks:
+            return []
+
         return selected
+
 
     # ============================================================
     # INTERNAL HELPERS
@@ -214,3 +241,5 @@ class VectorCache:
         except Exception:
             pass
         self._lru.pop(cache_id, None)
+
+
