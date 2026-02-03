@@ -7,14 +7,14 @@ from agent.state import AgentState
 
 
 
+# Scoring hyperparameters
 
-RECENCY_HALFLIFE_YEARS = 8
-MIN_DOCS_FOR_CONFIDENCE = 2
-MAX_SCORE = 1.0
+RECENCY_HALFLIFE_YEARS = 8          # publication age decay
+MIN_DOCS_FOR_CONFIDENCE = 2         # hard confidence gate
+MAX_SCORE = 1.0                    # upper bound for retrieval score
 
 
-
-
+# Helper scoring functions
 def recency_score(year: int | None, current_year: int | None = None) -> float:
     """
     Exponential decay based on publication year.
@@ -39,33 +39,36 @@ def similarity_score(similarity: float) -> float:
 def doc_diversity_bonus(num_docs: int) -> float:
     """
     Saturating reward for multiple independent documents.
-    NOTE: This rewards independence, not agreement.
     """
     return 1.0 - math.exp(-num_docs / 3)
 
 
 
+# LangGraph scoring node (Tier-agnostic)
 
 def score_node(state: AgentState) -> AgentState:
     """
-    LangGraph node:
-    - Consumes anchor_chunks from state
-    - Computes document-level and retrieval scores
-    - Updates state in-place
+    LangGraph node.
+
+    - Consumes state["anchor_chunks"] (from Tier 2 or Tier 3)
+    - This node is TIER-AGNOSTIC :- it does not care where the chunks came from.
     """
 
     anchor_chunks = state["anchor_chunks"]
 
 
+    # No evidence case (valid outcome, not an error)
     if not anchor_chunks:
         state["retrieval_score"] = 0.0
         state["num_docs"] = 0
         state["doc_scores"] = {}
         state["confident"] = False
+
+        # Track score evolution for stagnation detection
         state["prev_retrieval_scores"].append(0.0)
         return state
 
-
+    # Accumulate chunk-level scores per document
     doc_scores_accumulator: Dict[str, List[float]] = defaultdict(list)
 
     for chunk in anchor_chunks:
@@ -85,7 +88,8 @@ def score_node(state: AgentState) -> AgentState:
 
         doc_scores_accumulator[pmid].append(chunk_score)
 
-    # Collapse chunks → per-document score
+
+    # Collapse chunks → per-document score (max)
     doc_scores: Dict[str, float] = {
         pmid: max(scores)
         for pmid, scores in doc_scores_accumulator.items()
@@ -98,11 +102,11 @@ def score_node(state: AgentState) -> AgentState:
         state["num_docs"] = 0
         state["doc_scores"] = {}
         state["confident"] = False
+
         state["prev_retrieval_scores"].append(0.0)
         return state
 
-  
-
+    # Aggregate document-level evidence
     avg_doc_score = sum(doc_scores.values()) / num_docs
     diversity = doc_diversity_bonus(num_docs)
 
@@ -113,8 +117,7 @@ def score_node(state: AgentState) -> AgentState:
 
     confident = num_docs >= MIN_DOCS_FOR_CONFIDENCE
 
-    # Update state
-
+    # Update agent state
     state["retrieval_score"] = retrieval_score
     state["num_docs"] = num_docs
     state["doc_scores"] = doc_scores
@@ -124,6 +127,3 @@ def score_node(state: AgentState) -> AgentState:
     state["prev_retrieval_scores"].append(retrieval_score)
 
     return state
-
-
-# We clear the agent state for next query in the run_agent() function in main.py or like run.py

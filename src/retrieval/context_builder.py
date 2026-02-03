@@ -93,3 +93,4 @@ def flatten_context_from_state(state: AgentState) -> List[str]:
                 texts.append(text)
 
     return texts
+
