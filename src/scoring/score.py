@@ -33,7 +33,7 @@ def doc_diversity_bonus(nums_docs: int) -> float:
 
     return 1 - math.exp(-nums_docs/3) # Random half life choice since if in 3 then must be fact and no point exploding score using linear hence saturating
 
-def score_chunks(anchor_chunks: List[Dict[str,Any]]) -> Dict[str,Any]:
+def score_chunks(anchor_chunks: List[Dict[str,Any]]) -> Dict[str,Any]: # return datatype is for fast protytping need to define full Typed dict for this.
     """
     Aggregate chunk-level signals into document-level scores.
 
@@ -44,3 +44,24 @@ def score_chunks(anchor_chunks: List[Dict[str,Any]]) -> Dict[str,Any]:
         }
     """
     doc_score = defaultdict(list)
+
+    for chunk in anchor_chunks:
+        meta = chunk["metadata"]
+        pmid = meta.get("pmid")
+        if pmid is None:
+            continue
+        sim = similarity_score(chunk.get("similarity",0.0))
+
+        year  =  meta.get(("year"))
+
+        score = (0.7 * sim) + (0.3 * recency_score(year))
+        doc_score[pmid].append(score)
+
+        final_doc_scores = {
+            pmid : max(scores)for pmid,scores in doc_score.items()
+        }
+
+        return {
+            "doc_scores": final_doc_scores,
+            "num_docs": len(final_doc_scores)
+        }
