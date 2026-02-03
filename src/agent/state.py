@@ -5,32 +5,49 @@ import numpy as np
 class AgentState(TypedDict):
     """
     Global mutable state passed between LangGraph nodes.
-    This is the ONLY place where agent state is defined.
+
+    This state is:
+    - Per-query (cleared every run)
+    - The single source of truth for the agent
+    - Mutated in-place by graph nodes
+
+    Cross-query memory lives ONLY in the VectorCache.
     """
-   
+
     query: str
-    query_embedding: np.ndarray 
+    query_embedding: np.ndarray
 
-    iteration: int # Control / loop bookkeeping
-    api_calls: int
+    # Control / Loop bookkeeping
+    iteration: int                    # number of retrieval loops completed
+    api_calls: int                    # number of external API calls made
     decision: Optional[Literal["STOP", "FETCH_MORE"]]
+    stop_reason: Optional[str]        # e.g. cache_hit, score_threshold_met, stagnation
 
-    documents: List[Dict[str, Any]]          # raw PubMed docs (# Retrieval results)
-    doc_chunks_map: Dict[str, List[Dict[str, Any]]]  # pmid -> chunks
-    
-    anchor_chunks: List[Dict[str, Any]] # Chunk-level retrieval
+    # Track retrieval score evolution for stagnation detection
+    prev_retrieval_scores: List[float]
 
-    retrieval_score: float # Scoring outputs
-    num_docs: int
-    doc_scores: Dict[str, float]
-    confident: bool
 
-    expanded_context: Optional[Dict[str, List[Dict[str, Any]]]] # Context window expansion part
+    # Tier 3: Raw retrieval results (PubMed)
+    documents: List[Dict[str, Any]]   # raw fetched documents (abstracts, metadata)
+    doc_chunks_map: Dict[str, List[Dict[str, Any]]]   # pmid -> ordered list of chunks (for context expansion)
+
+    # Tier 2: Chunk-level evidence
+    # Selected high similarity chunks used for scoring and context window expansion
+    anchor_chunks: List[Dict[str, Any]]
+
+ 
+    # Scoring outputs (derived from anchor_chunks)
+    retrieval_score: float            # overall quality * diversity score
+    num_docs: int                     # number of distinct documents represented
+    doc_scores: Dict[str, float]      # "pmid" : "best chunk score"
+    confident: bool                   # hard confidence gate (min docs)
+
+
+    # Context & answer (used only after STOP)
+    expanded_context: Optional[Dict[str, List[Dict[str, Any]]]]
     final_answer: Optional[str]
 
-    cache_hit: bool # Cache-related
-    cache_payload: Optional[Dict[str, Any]]
+    # Tier 1: Query cache interaction
+    cache_hit: bool                   # whether query cache was used
+    cache_payload: Optional[Dict[str, Any]]  # reusable payload (answer, evidence, etc.)
 
-    stop_reason: Optional[str] # For debug
-
-    prev_retrieval_scores: List[float] # List of prev score to check if new retrieval are better or not and to prevent stagnation
