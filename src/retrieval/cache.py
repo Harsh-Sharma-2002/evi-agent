@@ -7,6 +7,8 @@ import chromadb
 import numpy as np
 from chromadb.config import Settings
 
+from agent.state import AgentState
+
 """
 We store:  
 metadata = {
@@ -215,9 +217,7 @@ class VectorCache:
         return selected
 
 
-    # ============================================================
     # INTERNAL HELPERS
-    # ============================================================
 
     def _is_expired(self, metadata: Dict[str, Any]) -> bool:
         return (time.time() - metadata["created_at"]) > self.ttl_seconds
@@ -237,5 +237,39 @@ class VectorCache:
         except Exception:
             pass
         self._lru.pop(cache_id, None)
+
+
+
+
+def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
+    """
+    LangGraph node.
+    Checks query cache and updates AgentState accordingly.
+    """
+
+    result = cache.search_query(state["query_embedding"])
+
+    if result is None:
+        # Cache miss
+        state["cache_hit"] = False
+        state["cache_payload"] = None
+        return state
+
+    # Cache hit
+    cache_id, payload, similarity = result
+
+    state["cache_hit"] = True
+    state["cache_payload"] = payload
+
+    # If payload contains final answer, short-circuit
+    if "answer" in payload:
+        state["final_answer"] = payload["answer"]
+
+    # Mark why we stopped
+    state["decision"] = "STOP"
+    state["stop_reason"] = "cache_hit"
+
+    return state
+
 
 
