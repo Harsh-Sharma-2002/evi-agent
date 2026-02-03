@@ -3,113 +3,127 @@ from collections import defaultdict
 import math
 import time
 
+from agent.state import AgentState
+
+
+
+
 RECENCY_HALFLIFE_YEARS = 8
 MIN_DOCS_FOR_CONFIDENCE = 2
 MAX_SCORE = 1.0
 
-def recency_score(year: int | None, current_year: int | None) -> float:
+
+
+
+def recency_score(year: int | None, current_year: int | None = None) -> float:
     """
     Exponential decay based on publication year.
     """
     if year is None:
         return 0.5
-    
+
     if current_year is None:
         current_year = time.gmtime().tm_year
 
-    age = max(0,current_year - year)
+    age = max(0, current_year - year)
+    return math.exp(-age / RECENCY_HALFLIFE_YEARS)
 
-    return math.exp(-age/RECENCY_HALFLIFE_YEARS)
 
 def similarity_score(similarity: float) -> float:
     """
-    To make sure the the range of score is in 0 to 1
+    Clamp similarity to [0, 1].
+    """
+    return max(0.0, min(1.0, similarity))
+
+
+def doc_diversity_bonus(num_docs: int) -> float:
+    """
+    Saturating reward for multiple independent documents.
+    NOTE: This rewards independence, not agreement.
+    """
+    return 1.0 - math.exp(-num_docs / 3)
+
+
+
+
+def score_node(state: AgentState) -> AgentState:
+    """
+    LangGraph node:
+    - Consumes anchor_chunks from state
+    - Computes document-level and retrieval scores
+    - Updates state in-place
     """
 
-def doc_diversity_bonus(num_docs: int) -> float: #“Number of independently sourced documents that contain at least one high-similarity chunk.” but they can contradich other so fix that logic
-    """
-    Saturating reward for muktiple indpendent documents.
-    """
+    anchor_chunks = state["anchor_chunks"]
 
-    return 1 - math.exp(-num_docs/3) # Random half life choice since if in 3 then must be fact and no point exploding score using linear hence saturating
 
-def score_chunks(anchor_chunks: List[Dict[str,Any]]) -> Dict[str,Any]: # return datatype is for fast protytping need to define full Typed dict for this.
-    """
-    Aggregate chunk-level signals into document-level scores.
+    if not anchor_chunks:
+        state["retrieval_score"] = 0.0
+        state["num_docs"] = 0
+        state["doc_scores"] = {}
+        state["confident"] = False
+        state["prev_retrieval_scores"].append(0.0)
+        return state
 
-    Returns:
-        {
-          "doc_scores": {pmid: float},
-          "num_docs": int
-        }
-    """
-    doc_score = defaultdict(list)
+
+    doc_scores_accumulator: Dict[str, List[float]] = defaultdict(list)
 
     for chunk in anchor_chunks:
-        meta = chunk["metadata"]
+        meta = chunk.get("metadata", {})
         pmid = meta.get("pmid")
+
         if pmid is None:
             continue
-        sim = similarity_score(chunk.get("similarity",0.0))
 
-        year  =  meta.get(("year"))
+        sim = similarity_score(chunk.get("similarity", 0.0))
+        year = meta.get("year")
 
-        score = (0.7 * sim) + (0.3 * recency_score(year))
-        doc_score[pmid].append(score)
+        chunk_score = (
+            0.7 * sim +
+            0.3 * recency_score(year)
+        )
 
-        final_doc_scores = {
-            pmid : max(scores)for pmid,scores in doc_score.items()
-        }
+        doc_scores_accumulator[pmid].append(chunk_score)
 
-        return {
-            "doc_scores": final_doc_scores,
-            "num_docs": len(final_doc_scores)
-        }
-    
+    # Collapse chunks → per-document score
+    doc_scores: Dict[str, float] = {
+        pmid: max(scores)
+        for pmid, scores in doc_scores_accumulator.items()
+    }
 
-def score_retieval(anchor_chunks: List[Dict[str,Any]]) -> Dict[str,Any]:
-    """
-    Compute overall retrieval score used by the agent to decide STOP / FETCH_MORE.
-
-    Returns:
-        {
-        "retrieval_score": float,
-        "num_docs": int,
-        "doc_scores": {pmid: float},
-        "confident": bool
-        }
-     """
-    
-    if not anchor_chunks:
-        return {
-            "retrieval_score": 0.0,
-            "num_docs": 0,
-            "doc_scores": {},
-            "confident": False,
-        }
-    
-    doc_result = score_chunks(anchor_chunks)
-    doc_scores = doc_result["doc_scores"]
-    num_docs = doc_result["nums_docs"]
+    num_docs = len(doc_scores)
 
     if num_docs == 0:
-        return {
-            "retrieval_score": 0.0,
-            "num_docs": 0,
-            "doc_scores": {},
-            "confident": False,
-        }
-    
-    avg_doc_score = sum(doc_scores.values())/ num_docs
+        state["retrieval_score"] = 0.0
+        state["num_docs"] = 0
+        state["doc_scores"] = {}
+        state["confident"] = False
+        state["prev_retrieval_scores"].append(0.0)
+        return state
+
+  
+
+    avg_doc_score = sum(doc_scores.values()) / num_docs
     diversity = doc_diversity_bonus(num_docs)
 
-    retrieval_score = min(MAX_SCORE,avg_doc_score*diversity)
+    retrieval_score = min(
+        MAX_SCORE,
+        avg_doc_score * diversity
+    )
 
-    confidence = num_docs >= MIN_DOCS_FOR_CONFIDENCE
+    confident = num_docs >= MIN_DOCS_FOR_CONFIDENCE
 
-    return {
-        "retrieval_score": retrieval_score,
-        "num_docs": num_docs,
-        "doc_scores": doc_scores,
-        "confident": confident,
-    }
+    # Update state
+
+    state["retrieval_score"] = retrieval_score
+    state["num_docs"] = num_docs
+    state["doc_scores"] = doc_scores
+    state["confident"] = confident
+
+    # Track score evolution for stagnation detection
+    state["prev_retrieval_scores"].append(retrieval_score)
+
+    return state
+
+
+# We clear the agent state for next query in the run_agent() function in main.py or like run.py
