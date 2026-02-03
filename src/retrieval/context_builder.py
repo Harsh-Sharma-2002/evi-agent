@@ -7,10 +7,7 @@ from agent.state import AgentState
 
 # Context window expansion (LangGraph node)
 
-def context_expansion_node(
-    state: AgentState,
-    window_size: int = 1,
-) -> AgentState:
+def context_expansion_node(state: AgentState, window_size: int = 1) -> AgentState:
     """
     LangGraph node.
 
@@ -42,19 +39,13 @@ def context_expansion_node(
             continue
 
         # Ensure chunks are ordered by chunk_index
-        all_chunks = sorted(
-            doc_chunks_map[pmid],
-            key=lambda c: c.get("chunk_index", 0),
-        )
+        all_chunks = sorted(doc_chunks_map[pmid], key=lambda c: c.get("chunk_index", 0))
 
         total = len(all_chunks)
 
         # Anchor position in ordered list
         try:
-            anchor_pos = next(
-                i for i, c in enumerate(all_chunks)
-                if c.get("chunk_index") == anchor_idx
-            )
+            anchor_pos = next(i for i, c in enumerate(all_chunks) if c.get("chunk_index") == anchor_idx)
         except StopIteration:
             continue
 
