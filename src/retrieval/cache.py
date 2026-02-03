@@ -7,24 +7,22 @@ import chromadb
 import numpy as np
 from chromadb.config import Settings
 
-from agent.state import AgentState
 
 """
-We store:  
-metadata = {
-    "query": query,
-    "created_at": now,
-    "payload": payload,
-}
+Hybrid vector memory (policy-free).
 
+Tier 1: Query cache
+- One vector per solved query
+- Payload-based reuse
+- TTL + LRU eviction
 
-But on access, you don’t update metadata in Chroma, only _lru.
-If ever persist Chroma later, LRU state won't survive restarts
-That's OK for a cache (not a database)
-No action needed unless want persistence later.
+Tier 2: Chunk store
+- Many vectors per document
+- Semantic precision
+- Diversity-controlled retrieval
 """
 
-##############################################
+
 class VectorCache:
     """
     Hybrid vector memory:
@@ -33,22 +31,16 @@ class VectorCache:
 
     IMPORTANT:
     - This class does NOT decide what should be cached.
-    - The agent decides admission. This class only stores and retrieves.
+    - The agent decides admission.
+    - This class only stores and retrieves.
     """
 
-    def __init__(
-        self,
-        similarity_threshold: float = 0.82,
-        max_query_items: int = 200,
-        ttl_seconds: int = 48 * 3600,
-        max_chunks_per_doc: int = 1,
-    ):
+    def __init__(self,similarity_threshold: float = 0.82, max_query_items: int = 200, ttl_seconds: int = 48 * 3600, max_chunks_per_doc: int = 1,):
         self.similarity_threshold = similarity_threshold
         self.max_query_items = max_query_items
         self.ttl_seconds = ttl_seconds
         self.max_chunks_per_doc = max_chunks_per_doc
 
-        # In-memory Chroma client
         self.client = chromadb.Client(
             Settings(
                 anonymized_telemetry=False,
@@ -56,7 +48,6 @@ class VectorCache:
             )
         )
 
-        # Two separate collections
         self.query_collection = self.client.get_or_create_collection(
             name="query_cache"
         )
@@ -67,13 +58,15 @@ class VectorCache:
         # LRU applies ONLY to query cache
         self._lru: OrderedDict[str, float] = OrderedDict()
 
-    
-    # QUERY CACHE (coarse-grained)
+    # Tier 1: QUERY CACHE
 
-    def search_query(self,query_embedding: np.ndarray, max_candidates: int = 3,) -> Optional[Tuple[str, Dict[str, Any], float]]:
+    def search_query(self, query_embedding: np.ndarray, max_candidates: int = 3,) -> Optional[Tuple[str, Dict[str, Any], float]]:
         """
-        Search for a reusable cached query.
-        Tries up to max_candidates in descending similarity order.
+        - Search for a reusable cached query.
+        - Returns:
+            (cache_id, payload, similarity)
+        - payload is the reusable unit.
+         similarity is returned for diagnostics only.
         """
 
         if self.query_collection.count() == 0:
@@ -85,14 +78,14 @@ class VectorCache:
             include=["ids", "metadatas", "distances"],
         )
 
-        for cache_id, metadata, dist in zip(results["ids"][0],results["metadatas"][0],results["distances"][0],):
+        for cache_id, metadata, dist in zip(results["ids"][0],results["metadatas"][0],results["distances"][0]):
             similarity = 1.0 - dist
 
-            #  Monotonic similarity: safe early stop
-            if similarity < self.similarity_threshold:
+            # Monotonic similarity → safe early exit
+            if similarity < self.similarity_threshold: # results are returned in descending order so if current fails next all will fail too
                 break
 
-            #  Expired → delete and try next
+            # Expired → delete and continue
             if self._is_expired(metadata):
                 self._delete_query(cache_id)
                 continue
@@ -103,17 +96,11 @@ class VectorCache:
 
         return None
 
-    def add_query(
-        self,
-        query: str,
-        embedding: np.ndarray,
-        payload: Dict[str, Any],
-    ) -> None:
+    def add_query(self, query: str, embedding: np.ndarray, payload: Dict[str, Any]) -> None:
         """
-        Add a solved query to the cache.
-        Admission policy MUST be enforced by the agent.
+        - Add a solved query to the cache.
+        - Admission policy is enforced by the agent.
         """
-
         cache_id = str(uuid.uuid4())
         now = time.time()
 
@@ -132,21 +119,10 @@ class VectorCache:
         self._lru[cache_id] = now
         self._evict_if_needed()
 
-    # ============================================================
-    # CHUNK STORE (fine-grained)
-    # ============================================================
-
-    def add_chunks(
-        self,
-        chunks: List[str],
-        embeddings: List[np.ndarray],
-        metadatas: List[Dict[str, Any]],
-    ) -> None:
+    # Tier 2: CHUNK STORE
+    def add_chunks(self, chunks: List[str], embeddings: List[np.ndarray], metadatas: List[Dict[str, Any]]) -> None:
         """
-        Store document chunks.
-        Each metadata dict MUST include:
-        - pmid
-        - chunk_index
+        - Store document chunks.
         """
 
         ids = [str(uuid.uuid4()) for _ in chunks]
@@ -158,19 +134,11 @@ class VectorCache:
             metadatas=metadatas,
         )
 
-    def search_chunks(
-        self,
-        query_embedding: np.ndarray,
-        k: int = 8,
-        similarity_threshold: Optional[float] = None,
-        min_chunks: int = 1,
-        ) -> List[Dict[str, Any]]:
+    def search_chunks(self, query_embedding: np.ndarray, k: int = 8, similarity_threshold: Optional[float] = None, min_chunks: int = 1) -> List[Dict[str, Any]]:
         """
-        Retrieve top-k semantically relevant chunks with:
-        - early exit on similarity drop
-        - optional per-call similarity threshold
-        - per-document diversity control
-        - minimum chunk guard for agent routing
+        Retrieve anchor chunks (Tier 2).
+
+        Enforces semantic similarity threshold, monotonic early exit, per-document diversity and minimum evidence guard
         """
 
         if self.chunk_collection.count() == 0:
@@ -187,10 +155,13 @@ class VectorCache:
         per_doc_counter = defaultdict(int)
         selected: List[Dict[str, Any]] = []
 
-        for text, meta, dist in zip(results["documents"][0],results["metadatas"][0],results["distances"][0],):
+        for text, meta, dist in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+            results["distances"][0],
+        ):
             similarity = 1.0 - dist
 
-            # EARLY EXIT 
             if similarity < threshold:
                 break
 
@@ -205,19 +176,19 @@ class VectorCache:
             selected.append(
                 {
                     "text": text,
-                     "metadata": meta,
+                    "metadata": meta,
                     "similarity": similarity,
                 }
             )
 
-    #  MINIMUM EVIDENCE GUARD (agent-friendly)
+        # Minimum evidence guard (agent-friendly)
         if len(selected) < min_chunks:
             return []
 
         return selected
 
-
     # INTERNAL HELPERS
+
 
     def _is_expired(self, metadata: Dict[str, Any]) -> bool:
         return (time.time() - metadata["created_at"]) > self.ttl_seconds
@@ -237,39 +208,3 @@ class VectorCache:
         except Exception:
             pass
         self._lru.pop(cache_id, None)
-
-
-
-
-def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
-    """
-    LangGraph node.
-    Checks query cache and updates AgentState accordingly.
-    """
-
-    result = cache.search_query(state["query_embedding"])
-
-    if result is None:
-        # Cache miss
-        state["cache_hit"] = False
-        state["cache_payload"] = None
-        return state
-
-    # Cache hit
-    cache_id, payload, similarity = result
-
-    state["cache_hit"] = True
-    state["cache_payload"] = payload
-
-    # If payload contains final answer, short-circuit
-    if "answer" in payload:
-        state["final_answer"] = payload["answer"]
-
-    # Mark why we stopped
-    state["decision"] = "STOP"
-    state["stop_reason"] = "cache_hit"
-
-    return state
-
-
-
