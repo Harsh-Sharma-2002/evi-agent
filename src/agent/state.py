@@ -14,7 +14,7 @@ class AgentState(TypedDict):
     iteration: int # Control / loop bookkeeping
     api_calls: int
     decision: Optional[Literal["STOP", "FETCH_MORE"]]
-    
+
     documents: List[Dict[str, Any]]          # raw PubMed docs (# Retrieval results)
     doc_chunks_map: Dict[str, List[Dict[str, Any]]]  # pmid -> chunks
     
@@ -30,3 +30,7 @@ class AgentState(TypedDict):
 
     cache_hit: bool # Cache-related
     cache_payload: Optional[Dict[str, Any]]
+
+    stop_reason: Optional[str] # For debug
+
+    prev_retrieval_scores: List[float] # List of prev score to check if new retrieval are better or not and to prevent stagnation
