@@ -26,12 +26,12 @@ def similarity_score(similarity: float) -> float:
     To make sure the the range of score is in 0 to 1
     """
 
-def doc_diversity_bonus(nums_docs: int) -> float:
+def doc_diversity_bonus(num_docs: int) -> float: #“Number of independently sourced documents that contain at least one high-similarity chunk.” but they can contradich other so fix that logic
     """
     Saturating reward for muktiple indpendent documents.
     """
 
-    return 1 - math.exp(-nums_docs/3) # Random half life choice since if in 3 then must be fact and no point exploding score using linear hence saturating
+    return 1 - math.exp(-num_docs/3) # Random half life choice since if in 3 then must be fact and no point exploding score using linear hence saturating
 
 def score_chunks(anchor_chunks: List[Dict[str,Any]]) -> Dict[str,Any]: # return datatype is for fast protytping need to define full Typed dict for this.
     """
@@ -65,3 +65,51 @@ def score_chunks(anchor_chunks: List[Dict[str,Any]]) -> Dict[str,Any]: # return 
             "doc_scores": final_doc_scores,
             "num_docs": len(final_doc_scores)
         }
+    
+
+def score_retieval(anchor_chunks: List[Dict[str,Any]]) -> Dict[str,Any]:
+    """
+    Compute overall retrieval score used by the agent to decide STOP / FETCH_MORE.
+
+    Returns:
+        {
+        "retrieval_score": float,
+        "num_docs": int,
+        "doc_scores": {pmid: float},
+        "confident": bool
+        }
+     """
+    
+    if not anchor_chunks:
+        return {
+            "retrieval_score": 0.0,
+            "num_docs": 0,
+            "doc_scores": {},
+            "confident": False,
+        }
+    
+    doc_result = score_chunks(anchor_chunks)
+    doc_scores = doc_result["doc_scores"]
+    num_docs = doc_result["nums_docs"]
+
+    if num_docs == 0:
+        return {
+            "retrieval_score": 0.0,
+            "num_docs": 0,
+            "doc_scores": {},
+            "confident": False,
+        }
+    
+    avg_doc_score = sum(doc_scores.values())/ num_docs
+    diversity = doc_diversity_bonus(num_docs)
+
+    retrieval_score = min(MAX_SCORE,avg_doc_score*diversity)
+
+    confidence = num_docs >= MIN_DOCS_FOR_CONFIDENCE
+
+    return {
+        "retrieval_score": retrieval_score,
+        "num_docs": num_docs,
+        "doc_scores": doc_scores,
+        "confident": confident,
+    }

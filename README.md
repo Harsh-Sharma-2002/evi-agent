@@ -324,3 +324,14 @@ Future extensions (persistent DB, full text, PDFs) are possible without rewritin
 Summary (one paragraph)
 
 cache.py implements a hybrid vector memory that cleanly separates decision reuse (query cache) from semantic precision (chunk store). It enforces TTL, LRU, similarity thresholds, and diversity constraints, while deliberately avoiding policy decisions. This design allows an agent to scale, stop safely, avoid redundant retrieval, and retrieve high-quality context without semantic dilution.
+
+Chunk Structure
+
+    {
+        "text": "...",
+        "similarity": 0.60,
+        "metadata": {
+            "pmid": "12345",
+            "year": 2021
+        }
+    },
