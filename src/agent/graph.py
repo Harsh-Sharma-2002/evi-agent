@@ -5,7 +5,9 @@ from .decisions import decision_node, should_cache
 from ..scoring.score import score_node
 from ..retrieval.cache import VectorCache, query_cache_node 
 from .state import AgentState
-from ..retrieval.cache import VectorCache
+from ..retrieval.cache import VectorCachefrom 
+from agent.state import AgentState
+from retrieval.cache import VectorCache
 """
 You are a research assistant.
 
@@ -90,5 +92,27 @@ def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
     # If payload already contains a final answer, reuse it
     if "answer" in payload:
         state["final_answer"] = payload["answer"]
+
+    return state
+ 
+
+
+
+def chunk_store_search_node(state: AgentState, cache: VectorCache) -> AgentState:
+    """
+    LangGraph node.
+
+    Tier 2: Chunk store lookup.
+
+    Responsibilities:
+    - Retrieve anchor chunks from the chunk store
+    - Populate state["anchor_chunks"]
+    - Does NOT score
+    - Does NOT decide STOP vs FETCH_MORE
+    """
+
+    state["anchor_chunks"] = cache.search_chunks(
+        query_embedding=state["query_embedding"]
+    )
 
     return state
