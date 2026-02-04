@@ -1,63 +1,66 @@
-                          ┌───────────────┐
-                          │   START       │
-                          └──────┬────────┘
-                                 v
-                   ┌────────────────────────┐
-                   │ PLAN_QUERY (LLM)       │
-                   │ - rewrite query        │
-                   │ - suggest focus        │
-                   └──────┬─────────────────┘
-                          v
-        ┌──────────────────────────────────────┐
-        │ RETRIEVE (API or CACHE CANDIDATES)   │
-        │ - fetch top-k docs                   │
-        │ - increment api_calls                │
-        └──────┬───────────────────────────────┘
-               v
-        ┌──────────────────────────────────────┐
-        │ CHECKER (CACHE + SCORE GATE)         │
-        │                                      │
-        │ 1. vector similarity >= τ ?          │
-        │ 2. TTL valid ?                       │
-        │ 3. retrieval_score >= min_score ?    │
-        └──────┬───────────────────────┬──────┘
-               │ HIT                    │ MISS
-               v                        v
-┌──────────────────────────┐   ┌────────────────────────────┐
-│ USE_CACHED_EVIDENCE      │   │ FETCH_MORE (API)           │
-│ - update LRU             │   │ - check rate limits        │
-│ - skip API               │   │ - fetch additional docs    │
-└─────────────┬────────────┘   └─────────────┬──────────────┘
-              │                                v
-              │                     ┌────────────────────────┐
-              │                     │ CACHE_INSERT            │
-              │                     │ - store embedding       │
-              │                     │ - store metadata        │
-              │                     │ - evict LRU/expired     │
-              │                     └─────────────┬──────────┘
-              │                                   v
-              └──────────────────────────────▶┌───────────────────────┐
-                                              │ SCORE_EVIDENCE        │
-                                              │ - relevance           │
-                                              │ - recency             │
-                                              │ - study type          │
-                                              │ - diversity           │
-                                              └─────────────┬─────────┘
-                                                            v
-                                          ┌────────────────────────────────┐
-                                          │ DECIDE_NEXT_STEP                │
-                                          │                                │
-                                          │ if score >= THRESHOLD → STOP   │
-                                          │ if limits hit → STOP           │
-                                          │ else → FETCH_MORE              │
-                                          └─────────────┬─────────┬───────┘
-                                                        │         │
-                                                     STOP     FETCH_MORE
-                                                        │         │
-                                                        v         │
-                                           ┌────────────────────┐ │
-                                           │ FINAL_RESPONSE     │◀┘
-                                           │ - answer           │
-                                           │ - citations        │
-                                           │ - cache status     │
-                                           └────────────────────┘
+    ┌──────────────────────────────┐
+    │        USER QUERY            │
+    └──────────────┬───────────────┘
+                   │
+                   v
+    ┌──────────────────────────────┐
+    │  EMBED QUERY                 │
+    │  np.asarray(embed(query))    │
+    └──────────────┬───────────────┘
+                   │
+                   v
+    ┌──────────────────────────────┐
+    │  TIER 1: QUERY CACHE         │
+    │  query_cache_node            │
+    └──────────────┬───────────────┘
+        cache hit? │
+          ┌────────┴────────┐
+          │ YES             │ NO
+          v                 v
+┌───────────────────┐   ┌──────────────────────────────┐
+│  STOP             │   │  ENTER RETRIEVAL LOOP        │
+│  (reuse answer)   │   └──────────────┬───────────────┘
+└───────────────────┘                  │
+                                       v
+                        ┌──────────────────────────────┐
+                        │  TIER 2: CHUNK STORE SEARCH  │
+                        │  cache.search_chunks         │
+                        └──────────────┬───────────────┘
+                                       │
+                                       v
+                         ┌──────────────────────────────┐
+                         │  SCORE EVIDENCE              │
+                         │  score_node                  │
+                         └──────────────┬───────────────┘
+                                        │
+                                        v
+                         ┌──────────────────────────────┐
+                         │  DECISION NODE               │
+                         │  STOP or FETCH_MORE          │
+                         └──────────────┬───────────────┘
+                                STOP?   │
+                           ┌────────────┴────────────┐
+                           │ YES                     │ NO
+                           v                         v
+            ┌──────────────────────────────┐   ┌──────────────────────────┐
+            │  CONTEXT EXPANSION           │   │ TIER 3: PUBMED FETCH     │
+            │  context_expansion_node      │   │ pubmed_fetch_node        │
+            └──────────────┬───────────────┘   └──────────────┬───────────┘
+                           │                                  │
+                           v                                  │
+            ┌──────────────────────────────┐                  │
+            │  LLM ANSWER SYNTHESIS        │                  │
+            │  (uses expanded context)     │                  │
+            └──────────────┬───────────────┘                  │
+                           │                                  │
+                           v                                  │
+            ┌──────────────────────────────┐                  │
+            │  CACHE ADMISSION CHECK       │◀─────────────────┘
+            │  should_cache(state)?        │
+            └──────────────┬───────────────┘
+                           │
+                           v
+            ┌──────────────────────────────┐
+            │            END               │
+            └──────────────────────────────┘
+

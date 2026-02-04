@@ -1,4 +1,9 @@
 ### Add the the system prompt to add the results and chunks in output and then use the chunks and resutl in the query cache
+import numpy as np
+from typing import Callable
+from .decisions import decision_node, should_cache
+from ..scoring.score import score_node
+from ..retrieval.cache import VectorCache, query_cache_node 
 from .state import AgentState
 from ..retrieval.cache import VectorCache
 """
@@ -21,7 +26,7 @@ graph = None
 embed = None
 
 def run_agent(query: str, cache: VectorCache):
-    # 🔄 NEW STATE EVERY TIME
+    #  NEW STATE EVERY TIME
     state: AgentState = {
         "query": query,
         "query_embedding": embed(query),
@@ -52,3 +57,38 @@ def run_agent(query: str, cache: VectorCache):
     final_state = graph.invoke(state)
 
     return final_state["final_answer"]
+
+from agent.state import AgentState
+from retrieval.cache import VectorCache
+
+
+def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
+    """
+    LangGraph node.
+
+    Tier 1: Query cache lookup.
+
+    Responsibilities:
+    - Check whether a semantically equivalent query was solved before
+    - Populate cache-related fields in AgentState
+    """
+
+    result = cache.search_query(state["query_embedding"])
+
+    if result is None:
+        # Cache miss
+        state["cache_hit"] = False
+        state["cache_payload"] = None
+        return state
+
+    # Cache hit
+    cache_id, payload, similarity = result
+
+    state["cache_hit"] = True
+    state["cache_payload"] = payload
+
+    # If payload already contains a final answer, reuse it
+    if "answer" in payload:
+        state["final_answer"] = payload["answer"]
+
+    return state
