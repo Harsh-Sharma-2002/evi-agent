@@ -12,7 +12,7 @@ from chromadb.config import Settings
 Hybrid vector memory (policy-free).
 
 Tier 1: Query cache
-- One vector per solved query
+- One vector per solved query                          ### Why is cache policy free, policy vs mechanism, why context expansion after stop, why monotonic similarity matters, 
 - Payload-based reuse
 - TTL + LRU eviction
 
