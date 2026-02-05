@@ -1,75 +1,29 @@
 import numpy as np
-from typing import Callable
+from typing import Literal
 
-from .state import AgentState
-from .decisions import decision_node, should_cache
-from ..retrieval.cache import VectorCache
-from ..retrieval.context_builder import context_expansion_node
-from ..retrieval.pubmed import pubmed_fetch_node
-from ..scoring.score import score_node
+from langgraph.graph import StateGraph, END
 
+from agent.state import AgentState
+from agent.decisions import decision_node, should_cache
 
+from retrieval.cache import VectorCache
+from retrieval.pubmed import pubmed_fetch_node
+from retrieval.context_builder import context_expansion_node
+from scoring.score import score_node
 
-# Tier 1: Query cache lookup node (defined ONLY here)
-
-
-def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
-    """
-    Tier 1: Query cache lookup.
-    Populates cache_hit / cache_payload / final_answer (if present).
-    Does NOT set decision or stop_reason.
-    """
-    result = cache.search_query(state["query_embedding"])
-    if result is None:
-        state["cache_hit"] = False
-        state["cache_payload"] = None
-        return state
-
-    _, payload, _ = result
-    state["cache_hit"] = True
-    state["cache_payload"] = payload
-
-    if "answer" in payload:
-        state["final_answer"] = payload["answer"]
-
-    return state
+from utils.llm import embed, call_llm
+from utils.prompt import build_final_prompt
+from utils.memory import ChatMemory
 
 
-# -------------------------------------------------
-# Tier 2: Chunk store search node
-# -------------------------------------------------
+# =================================================
+# Node functions
+# =================================================
 
-def chunk_store_search_node(state: AgentState, cache: VectorCache) -> AgentState:
-    """
-    Tier 2: Retrieve anchor chunks from chunk store.
-    """
-    state["anchor_chunks"] = cache.search_chunks(query_embedding=state["query_embedding"])
-    return state
-
-
-# -------------------------------------------------
-# Main runner (manual loop, graph-style)
-# -------------------------------------------------
-
-def run_agent(
-    query: str,
-    embed: Callable[[str], list[float]],
-    cache: VectorCache,
-) -> AgentState:
-    """
-    3-tier control flow (no LangGraph wiring yet).
-
-    Tier 1: query cache
-    Tier 2: chunk store reuse (+ scoring + decision)
-    Tier 3: PubMed fetch (fallback) → loops back to Tier 2
-    """
-
-    # ---- fresh state ----
-    q_emb = np.asarray(embed(query))  #  invariant enforced at boundary
-
-    state: AgentState = {
+def init_state_node(query: str) -> AgentState:
+    return {
         "query": query,
-        "query_embedding": q_emb,
+        "query_embedding": np.asarray(embed(query)),
 
         "iteration": 0,
         "api_calls": 0,
@@ -94,34 +48,44 @@ def run_agent(
         "cache_payload": None,
     }
 
-    # ---- Tier 1: query cache ----
-    state = query_cache_node(state, cache)
-    if state["cache_hit"]:
+
+def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
+    result = cache.search_query(state["query_embedding"])
+    if result is None:
+        state["cache_hit"] = False
         return state
 
-    # ---- main loop (Tier 2 ↔ Tier 3) ----
-    while True:
-        # Tier 2: reuse chunk store
-        state = chunk_store_search_node(state, cache)
-        state = score_node(state)
-        state = decision_node(state)
+    _, payload, _ = result
+    state["cache_hit"] = True
+    state["cache_payload"] = payload
+    state["final_answer"] = payload.get("answer")
+    return state
 
-        if state["decision"] == "STOP":
-            break
 
-        # FETCH_MORE edge → Tier 3 PubMed fetch
-        state = pubmed_fetch_node(state, cache, embed=embed, retmax=5)
+def chunk_store_search_node(state: AgentState, cache: VectorCache) -> AgentState:
+    state["anchor_chunks"] = cache.search_chunks(
+        query_embedding=state["query_embedding"]
+    )
+    return state
 
-        #  iteration must advance for pagination/offset
-        state["iteration"] += 1
 
-    # ---- STOP path: context expansion ----
-    if state["anchor_chunks"]:
-        state = context_expansion_node(state, window_size=1)
+def pubmed_node(state: AgentState, cache: VectorCache) -> AgentState:
+    state = pubmed_fetch_node(state, cache)
+    state["iteration"] += 1
+    return state
 
-    # NOTE: LLM synthesis node should set state["final_answer"] here.
 
-    # ---- Cache admission ----
+def prompt_node(state: AgentState, memory: ChatMemory) -> AgentState:
+    prompt = build_final_prompt(
+        state,
+        chat_memory=memory.get_memory_context(),
+    )
+    state["final_answer"] = call_llm(state, prompt)
+    memory.update(state)
+    return state
+
+
+def cache_write_node(state: AgentState, cache: VectorCache) -> AgentState:
     if should_cache(state):
         cache.add_query(
             query=state["query"],
@@ -133,5 +97,81 @@ def run_agent(
                 "num_docs": state["num_docs"],
             },
         )
-
     return state
+
+
+# =================================================
+# Routing (conditional edges)
+# =================================================
+
+def route_after_cache(state: AgentState) -> Literal["end", "retrieve"]:
+    return "end" if state["cache_hit"] else "retrieve"
+
+
+def route_after_decision(state: AgentState) -> Literal["stop", "fetch"]:
+    return "stop" if state["decision"] == "STOP" else "fetch"
+
+
+# =================================================
+# Graph builder
+# =================================================
+
+def build_agent_graph(cache: VectorCache, memory: ChatMemory):
+    g = StateGraph(AgentState)
+
+    # ---- add nodes ----
+    g.add_node("cache", lambda s: query_cache_node(s, cache))
+    g.add_node("retrieve", lambda s: chunk_store_search_node(s, cache))
+    g.add_node("score", score_node)
+    g.add_node("decide", decision_node)
+    g.add_node("fetch", lambda s: pubmed_node(s, cache))
+    g.add_node("context", context_expansion_node)
+    g.add_node("prompt", lambda s: prompt_node(s, memory))
+    g.add_node("cache_write", lambda s: cache_write_node(s, cache))
+
+    # ---- entry ----
+    g.set_entry_point("cache")
+
+    # ---- Tier 1 routing ----
+    g.add_conditional_edges(
+        "cache",
+        route_after_cache,
+        {
+            "end": END,
+            "retrieve": "retrieve",
+        },
+    )
+
+    # ---- Tier 2 path ----
+    g.add_edge("retrieve", "score")
+    g.add_edge("score", "decide")
+
+    # ---- decision routing ----
+    g.add_conditional_edges(
+        "decide",
+        route_after_decision,
+        {
+            "stop": "context",
+            "fetch": "fetch",
+        },
+    )
+
+    # ---- Tier 3 loop ----
+    g.add_edge("fetch", "retrieve")
+
+    # ---- STOP path ----
+    g.add_edge("context", "prompt")
+    g.add_edge("prompt", "cache_write")
+    g.add_edge("cache_write", END)
+
+    return g.compile()
+
+
+# =================================================
+# Public runner
+# =================================================
+
+def run_agent(query: str, cache: VectorCache, memory: ChatMemory) -> AgentState:
+    graph = build_agent_graph(cache, memory)
+    state = init_state_node(query)
+    return graph.invoke(state)

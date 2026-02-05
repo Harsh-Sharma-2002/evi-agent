@@ -12,17 +12,14 @@ class ChatMemory:
 
     - Stores ONE rolling summary string
     - Uses LLM only when update threshold is crossed
-    - No short-term raw turn storage
     - Designed to complement query LRU cache
     """
 
-    summarize_every: int = 3  # summarize after N interactions
+    summarize_every: int = 10  # summarize after N interactions
     summary: str = ""
     _interaction_count: int = 0
 
-    # ---------------------------------------------
     # Update memory
-    # ---------------------------------------------
 
     def update(self, state: AgentState) -> None:
         """
@@ -39,9 +36,7 @@ class ChatMemory:
         self._interaction_count = 0
         self._summarize(state)
 
-    # ---------------------------------------------
     # Summarization
-    # ---------------------------------------------
 
     def _summarize(self, state: AgentState) -> None:
         """

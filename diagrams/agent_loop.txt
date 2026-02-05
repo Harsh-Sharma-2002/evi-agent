@@ -1,66 +1,154 @@
-    ┌──────────────────────────────┐
-    │        USER QUERY            │
-    └──────────────┬───────────────┘
-                   │
-                   v
-    ┌──────────────────────────────┐
-    │  EMBED QUERY                 │
-    │  np.asarray(embed(query))    │
-    └──────────────┬───────────────┘
-                   │
-                   v
-    ┌──────────────────────────────┐
-    │  TIER 1: QUERY CACHE         │
-    │  query_cache_node            │
-    └──────────────┬───────────────┘
-        cache hit? │
-          ┌────────┴────────┐
-          │ YES             │ NO
-          v                 v
-┌───────────────────┐   ┌──────────────────────────────┐
-│  STOP             │   │  ENTER RETRIEVAL LOOP        │
-│  (reuse answer)   │   └──────────────┬───────────────┘
-└───────────────────┘                  │
-                                       v
-                        ┌──────────────────────────────┐
-                        │  TIER 2: CHUNK STORE SEARCH  │
-                        │  cache.search_chunks         │
-                        └──────────────┬───────────────┘
-                                       │
-                                       v
-                         ┌──────────────────────────────┐
-                         │  SCORE EVIDENCE              │
-                         │  score_node                  │
-                         └──────────────┬───────────────┘
-                                        │
-                                        v
-                         ┌──────────────────────────────┐
-                         │  DECISION NODE               │
-                         │  STOP or FETCH_MORE          │
-                         └──────────────┬───────────────┘
-                                STOP?   │
-                           ┌────────────┴────────────┐
-                           │ YES                     │ NO
-                           v                         v
-            ┌──────────────────────────────┐   ┌──────────────────────────┐
-            │  CONTEXT EXPANSION           │   │ TIER 3: PUBMED FETCH     │
-            │  context_expansion_node      │   │ pubmed_fetch_node        │
-            └──────────────┬───────────────┘   └──────────────┬───────────┘
-                           │                                  │
-                           v                                  │
-            ┌──────────────────────────────┐                  │
-            │  LLM ANSWER SYNTHESIS        │                  │
-            │  (uses expanded context)     │                  │
-            └──────────────┬───────────────┘                  │
-                           │                                  │
-                           v                                  │
-            ┌──────────────────────────────┐                  │
-            │  CACHE ADMISSION CHECK       │◀─────────────────┘
-            │  should_cache(state)?        │
-            └──────────────┬───────────────┘
-                           │
-                           v
-            ┌──────────────────────────────┐
-            │            END               │
-            └──────────────────────────────┘
-
+┌──────────────────────────────────────────────────────────┐
+│                        USER QUERY                        │
+│                     (string input)                       │
+└───────────────────────────┬──────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────┐
+│ embed(text)                                              │
+│ src/utils/llm.py                                         │
+│ - SentenceTransformer (local)                            │
+│ - returns List[float]                                    │
+└───────────────────────────┬──────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────┐
+│ Initialize AgentState                                    │
+│ src/agent/graph.py                                       │
+│ - per-query, ephemeral state                             │
+│ - no memory, no cache mutation yet                       │
+└───────────────────────────┬──────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────┐
+│ TIER 1: QUERY CACHE LOOKUP                               │
+│ query_cache_node                                         │
+│ src/agent/graph.py                                       │
+│                                                          │
+│ calls:                                                   │
+│   VectorCache.search_query()                             │
+│   src/retrieval/cache.py                                 │
+│                                                          │
+│ outputs:                                                 │
+│   state.cache_hit                                        │
+│   state.cache_payload (deep-copied)                      │
+│   state.final_answer (if cached)                         │
+└───────────────┬─────────────────────────────┬────────────┘
+                │ YES (cache_hit)             │ NO
+                ▼                             ▼
+┌──────────────────────────┐        ┌────────────────────────────────────┐
+│        STOP              │        │      ENTER RETRIEVAL LOOP          │
+│  (reuse cached answer)   │        │      src/agent/graph.py            │
+└──────────────────────────┘        └────────────────┬───────────────────┘
+                                                     │
+                                                     ▼
+        ┌──────────────────────────────────────────────────────────┐
+        │ TIER 2: CHUNK STORE REUSE                                │
+        │ chunk_store_search_node                                  │
+        │ src/agent/graph.py                                       │
+        │                                                          │
+        │ calls:                                                   │
+        │   VectorCache.search_chunks()                            │
+        │   src/retrieval/cache.py                                 │
+        │                                                          │
+        │ outputs:                                                 │
+        │   state.anchor_chunks                                    │
+        └───────────────────────────┬──────────────────────────────┘
+                                    │
+                                    ▼
+        ┌──────────────────────────────────────────────────────────┐
+        │ SCORE EVIDENCE                                           │
+        │ score_node                                               │
+        │ src/scoring/score.py                                     │
+        │                                                          │
+        │ computes:                                                │
+        │   - per-doc max score                                    │
+        │   - avg_doc_score                                        │
+        │   - diversity bonus                                      │
+        │                                                          │
+        │ updates:                                                 │
+        │   state.retrieval_score                                  │
+        │   state.num_docs                                         │
+        │   state.doc_scores                                       │
+        │   state.confident                                        │
+        │   state.prev_retrieval_scores                            │
+        └───────────────────────────┬──────────────────────────────┘
+                                    │
+                                    ▼
+        ┌──────────────────────────────────────────────────────────┐
+        │ DECISION NODE                                            │
+        │ decision_node                                            │
+        │ src/agent/decisions.py                                   │
+        │                                                          │
+        │ checks:                                                  │
+        │   - cache_hit                                            │
+        │   - score threshold                                      │
+        │   - confidence                                           │
+        │   - stagnation                                           │
+        │   - api_calls / iteration limits                         │
+        │                                                          │
+        │ sets:                                                    │
+        │   state.decision = STOP | FETCH_MORE                     │
+        │   state.stop_reason                                      │
+        └───────────────┬─────────────────────────────┬────────────┘
+                        │ STOP                        │ FETCH_MORE
+                        ▼                             ▼
+┌──────────────────────────────────────────┐     ┌──────────────────────────────────────────┐
+│ CONTEXT EXPANSION + PROMPT BUILD         │     │ TIER 3: PUBMED FETCH                     │
+│ build_final_prompt                       │     │ pubmed_fetch_node                        │
+│ src/utils/prompt.py                      │     │ src/retrieval/pubmed.py                  │
+│                                          │     │                                          │
+│ internally calls:                        │     │ calls:                                   │
+│   context_expansion_node                 │     │   PubMed E-Utilities API                 │
+│   src/retrieval/context_builder.py       │     │                                          │
+│                                          │     │ extracts:                                │
+│ builds:                                  │     │   - abstract                             │
+│   - system rules                         │     │   - conclusion (optional)                │
+│   - optional chat memory                 │     │                                          │
+│   - evidence blocks                      │     │ chunks + embeds via embed()              │
+│                                          │     │ updates:                                 │
+│ outputs:                                 │     │   state.documents                        │
+│   FINAL PROMPT STRING                    │     │   state.doc_chunks_map                   │
+└──────────────────────────┬───────────────┘     │   VectorCache.add_chunks()               │
+                           │                     │   state.api_calls                        │
+                           ▼                     └───────────────┬──────────────────────────┘
+┌──────────────────────────────────────────────────────────┐     │
+│ LLM CALL (REMOTE)                                        │     │
+│ call_llm                                                 │◀────┘
+│ src/utils/llm.py                                         │
+│                                                          │
+│ - HuggingFace Inference API                              │
+│ - NO local LLM load                                      │
+│                                                          │
+│ sets:                                                    │
+│   state.final_answer                                     │
+└───────────────────────────┬──────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────┐
+│ CHAT MEMORY UPDATE                                       │
+│ ChatMemory.update                                        │
+│ src/utils/memory.py                                      │
+│                                                          │
+│ - summary-only memory                                    │
+│ - LLM summarization only every N interactions            │
+│ - NOT stored in AgentState                               │
+└───────────────────────────┬──────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────┐
+│ CACHE ADMISSION CHECK                                    │
+│ should_cache                                             │
+│ src/agent/decisions.py                                   │
+│                                                          │
+│ if TRUE → VectorCache.add_query                          │
+│   - stores final answer                                  │
+│   - stores retrieval_score + doc_scores                  │
+│   - LRU + TTL enforced                                   │
+└───────────────────────────┬──────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────┐
+│                        END                               │
+│              Final AgentState returned                   │
+└──────────────────────────────────────────────────────────┘
