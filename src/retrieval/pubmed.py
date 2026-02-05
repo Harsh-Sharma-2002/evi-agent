@@ -1,25 +1,75 @@
-from ..agent.state import AgentState
 import requests
 import numpy as np
-from typing import List, Dict, Any
-from retrieval.cache import VectorCache
+from typing import List, Dict, Any, Optional
 import xml.etree.ElementTree as ET
-from utils.llm import embed
+
+from agent.state import AgentState
+from retrieval.cache import VectorCache
 
 
-def _fetch_pubmed_docs(query: str, retmax: int = 5, offset: int = 0) -> List[Dict[str, Any]]:
+# -------------------------------------------------
+# Internal helper: fetch PubMed docs (abstract + conclusion)
+# -------------------------------------------------
+
+def _extract_year(article: ET.Element) -> Optional[int]:
+    year_text = article.findtext(".//PubDate/Year")
+    if year_text and year_text.isdigit():
+        return int(year_text)
+    return None
+
+
+def _extract_abstract_and_conclusion(article: ET.Element) -> tuple[Optional[str], Optional[str]]:
     """
-    Fetch PubMed documents.
+    PubMed XML is messy. AbstractText nodes may:
+    - be multiple segments
+    - include Label attributes (e.g., CONCLUSIONS)
+    - use mixed case
 
-    Returns:
+    Strategy:
+    - Abstract: concatenate ALL AbstractText segments (best-effort)
+    - Conclusion: prefer a labeled segment containing "conclu" (case-insensitive),
+      else None.
+    """
+    nodes = article.findall(".//Abstract/AbstractText")
+    if not nodes:
+        return None, None
+
+    # Full abstract = concat all segments
+    parts: List[str] = []
+    labeled_conclusion: Optional[str] = None
+
+    for n in nodes:
+        txt = (n.text or "").strip()
+        if txt:
+            parts.append(txt)
+
+        label = n.attrib.get("Label") or n.attrib.get("NlmCategory") or ""
+        label_lc = label.lower()
+        if ("conclu" in label_lc) and txt:
+            # e.g. "CONCLUSION", "CONCLUSIONS"
+            labeled_conclusion = txt
+
+    abstract = " ".join(parts).strip() if parts else None
+    conclusion = labeled_conclusion.strip() if labeled_conclusion else None
+    return abstract, conclusion
+
+
+def _fetch_pubmed_docs(
+    query: str,
+    retmax: int = 5,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """
+    Minimal PubMed search + fetch.
+
+    Returns list of:
     {
       "pmid": str,
       "year": int | None,
-      "abstract": str | None,
+      "abstract": str,
       "conclusion": str | None
     }
     """
-
     search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     search_params = {
         "db": "pubmed",
@@ -29,8 +79,9 @@ def _fetch_pubmed_docs(query: str, retmax: int = 5, offset: int = 0) -> List[Dic
         "retstart": offset,
     }
 
-    pmids = requests.get(search_url, params=search_params, timeout=10)\
-                     .json()["esearchresult"]["idlist"]
+    search_resp = requests.get(search_url, params=search_params, timeout=10)
+    search_resp.raise_for_status()
+    pmids = search_resp.json()["esearchresult"]["idlist"]
 
     if not pmids:
         return []
@@ -42,114 +93,153 @@ def _fetch_pubmed_docs(query: str, retmax: int = 5, offset: int = 0) -> List[Dic
         "retmode": "xml",
     }
 
-    root = ET.fromstring(
-        requests.get(fetch_url, params=fetch_params, timeout=10).text
-    )
+    fetch_resp = requests.get(fetch_url, params=fetch_params, timeout=10)
+    fetch_resp.raise_for_status()
+
+    root = ET.fromstring(fetch_resp.text)
 
     docs: List[Dict[str, Any]] = []
-
     for article in root.findall(".//PubmedArticle"):
         pmid = article.findtext(".//PMID")
-        year_text = article.findtext(".//PubDate/Year")
+        if not pmid:
+            continue
 
-        abstract = " ".join(
-            t.text for t in article.findall(".//Abstract/AbstractText")
-            if t.text
-        )
+        year = _extract_year(article)
+        abstract, conclusion = _extract_abstract_and_conclusion(article)
 
-        # Conclusion: explicit section or fallback to last AbstractText
-        conclusion_nodes = [
-            t.text for t in article.findall(".//Abstract/AbstractText[@Label='CONCLUSION']")
-            if t.text
-        ]
-
-        conclusion = (
-            conclusion_nodes[0]
-            if conclusion_nodes
-            else None
-        )
-
-        if not pmid or not abstract:
+        if not abstract:
             continue
 
         docs.append(
             {
                 "pmid": pmid,
-                "year": int(year_text) if year_text and year_text.isdigit() else None,
-                "abstract": abstract.strip(),
-                "conclusion": conclusion.strip() if conclusion else None,
+                "year": year,
+                "abstract": abstract,
+                "conclusion": conclusion,
             }
         )
 
     return docs
 
 
+# -------------------------------------------------
+# Tier 3: PubMed fetch node
+# -------------------------------------------------
 
-def pubmed_fetch_node(state: AgentState, cache: VectorCache) -> AgentState:
+def pubmed_fetch_node(
+    state: AgentState,
+    cache: VectorCache,
+    embed,  # ✅ injected to ensure SAME embedding policy as query embedding
+    retmax: int = 5,
+) -> AgentState:
     """
-    Tier 3:
-    - Fetch PubMed documents
-    - Create two chunks per paper:
-        0 → abstract
-        1 → conclusion (if available)
+    LangGraph node (Tier 3).
+
+    Fetches new PubMed docs, makes up to TWO chunks per paper:
+      - chunk_index 0: abstract
+      - chunk_index 1: conclusion (if present)
+
+    Updates:
+      - state["documents"]
+      - state["doc_chunks_map"]  (for context expansion)
+      - cache chunk store        (for Tier 2 reuse)
+      - state["api_calls"]
+
+    Does NOT:
+      - score
+      - decide stop/fetch
     """
-    offset = state["iteration"] * 5
-    documents = _fetch_pubmed_docs(query=state["query"],retmax=5,offset=offset)
 
-    if not documents:
-        state["api_calls"] += 1
-        return state
-    
-    chunk_texts: List[str] = []
-    chunk_embed = List[np.ndarray]
-    chunk_meta = List[Dict[str,Any]] = []
+    offset = state["iteration"] * retmax
+    docs = _fetch_pubmed_docs(state["query"], retmax=retmax, offset=offset)
 
-    for doc in documents:
-        pmid = doc["pmid"]
-        year = doc["year"]
-        
-        # Abstract chunk
-        abs_txt = doc["abstract"]
-        emb = np.asarray(embed(abs_txt))
-
-        chunk_texts.append(abs_txt)
-        chunk_embed.append(emb)
-        chunk_meta.append({"pmid":pmid,
-                          "year":year,
-                          "chunk_index": 0,
-                          "section": "abstract"
-                        })
-        state["doc_chunks_map"].setdefault(pmid,[]).append({
-            "text" : abs_txt,
-            "chunk_index": 0,
-            "metadata": {"pmid":pmid, "year": year}
-        })
-
-        if doc["conclusion"]:
-            con_txt = doc["conclusion"]
-            emb = np.asarray(embed(con_txt))
-
-            chunk_texts.append(con_txt)
-            chunk_embed.append(emb)
-            chunk_meta.append({
-                "pmid": pmid,
-                "year": year,
-                "chunk_index": 1,
-                "section": "conclusion"
-            })
-
-            state["doc_chunks_map"][pmid].append({
-                "text": con_txt,
-                "chunk_index": 1,
-                "metadata": {"pmid": pmid, "year": year},
-            })
-
-    cache.add_chunks(chunk_texts, chunk_embed, chunk_meta)
-
-    state["documents"].extend(documents)
+    # Count API call even if empty result (still cost)
     state["api_calls"] += 1
 
+    if not docs:
+        return state
+
+    chunk_texts: List[str] = []
+    chunk_embeddings: List[np.ndarray] = []
+    chunk_metadatas: List[Dict[str, Any]] = []
+
+    for doc in docs:
+        pmid = doc["pmid"]
+        year = doc["year"]
+
+        # Ensure doc entry exists for context expansion
+        state["doc_chunks_map"].setdefault(pmid, [])
+
+        # -------------------------
+        # Chunk 0: abstract
+        # -------------------------
+        abs_text = doc["abstract"]
+        abs_emb = np.asarray(embed(abs_text))
+
+        chunk_texts.append(abs_text)
+        chunk_embeddings.append(abs_emb)
+        chunk_metadatas.append(
+            {
+                "pmid": pmid,
+                "year": year,
+                "chunk_index": 0,
+                "section": "abstract",
+            }
+        )
+
+        state["doc_chunks_map"][pmid].append(
+            {
+                "text": abs_text,
+                "chunk_index": 0,
+                "metadata": {  # ✅ include chunk_index inside metadata (MANDATORY)
+                    "pmid": pmid,
+                    "year": year,
+                    "chunk_index": 0,
+                    "section": "abstract",
+                },
+            }
+        )
+
+        # -------------------------
+        # Chunk 1: conclusion (optional)
+        # -------------------------
+        concl = doc.get("conclusion")
+        if concl:
+            concl_text = concl
+            concl_emb = np.asarray(embed(concl_text))
+
+            chunk_texts.append(concl_text)
+            chunk_embeddings.append(concl_emb)
+            chunk_metadatas.append(
+                {
+                    "pmid": pmid,
+                    "year": year,
+                    "chunk_index": 1,
+                    "section": "conclusion",
+                }
+            )
+
+            state["doc_chunks_map"][pmid].append(
+                {
+                    "text": concl_text,
+                    "chunk_index": 1,
+                    "metadata": {  # ✅ include chunk_index inside metadata (MANDATORY)
+                        "pmid": pmid,
+                        "year": year,
+                        "chunk_index": 1,
+                        "section": "conclusion",
+                    },
+                }
+            )
+
+    # Add to Tier 2 chunk store (cross-query memory)
+    cache.add_chunks(
+        chunks=chunk_texts,
+        embeddings=chunk_embeddings,
+        metadatas=chunk_metadatas,
+    )
+
+    # Keep raw docs (optional debugging / provenance)
+    state["documents"].extend(docs)
+
     return state
-
-        
-
