@@ -9,9 +9,9 @@ from ..retrieval.pubmed import pubmed_fetch_node
 from ..scoring.score import score_node
 
 
-# -------------------------------------------------
+
 # Tier 1: Query cache lookup node (defined ONLY here)
-# -------------------------------------------------
+
 
 def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
     """
