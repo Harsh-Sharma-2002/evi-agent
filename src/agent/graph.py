@@ -17,10 +17,18 @@ from utils.memory import ChatMemory
 
 
 # =================================================
-# Node functions
+# Graph Nodes
 # =================================================
 
-def init_state_node(query: str) -> AgentState:
+def init_state_node(state: dict) -> AgentState:
+    """
+    Entry node.
+
+    Input state: { "query": str }
+    Output state: fully initialized AgentState
+    """
+    query = state["query"]
+
     return {
         "query": query,
         "query_embedding": np.asarray(embed(query)),
@@ -71,7 +79,7 @@ def chunk_store_search_node(state: AgentState, cache: VectorCache) -> AgentState
 
 def pubmed_node(state: AgentState, cache: VectorCache) -> AgentState:
     state = pubmed_fetch_node(state, cache)
-    state["iteration"] += 1
+    state["iteration"] += 1  # iteration == number of PubMed fetches
     return state
 
 
@@ -101,7 +109,7 @@ def cache_write_node(state: AgentState, cache: VectorCache) -> AgentState:
 
 
 # =================================================
-# Routing (conditional edges)
+# Routing (Edges)
 # =================================================
 
 def route_after_cache(state: AgentState) -> Literal["end", "retrieve"]:
@@ -113,13 +121,14 @@ def route_after_decision(state: AgentState) -> Literal["stop", "fetch"]:
 
 
 # =================================================
-# Graph builder
+# Graph Builder
 # =================================================
 
 def build_agent_graph(cache: VectorCache, memory: ChatMemory):
     g = StateGraph(AgentState)
 
-    # ---- add nodes ----
+    # ---- nodes ----
+    g.add_node("init", init_state_node)
     g.add_node("cache", lambda s: query_cache_node(s, cache))
     g.add_node("retrieve", lambda s: chunk_store_search_node(s, cache))
     g.add_node("score", score_node)
@@ -130,7 +139,10 @@ def build_agent_graph(cache: VectorCache, memory: ChatMemory):
     g.add_node("cache_write", lambda s: cache_write_node(s, cache))
 
     # ---- entry ----
-    g.set_entry_point("cache")
+    g.set_entry_point("init")
+
+    # ---- init → cache ----
+    g.add_edge("init", "cache")
 
     # ---- Tier 1 routing ----
     g.add_conditional_edges(
@@ -142,11 +154,11 @@ def build_agent_graph(cache: VectorCache, memory: ChatMemory):
         },
     )
 
-    # ---- Tier 2 path ----
+    # ---- Tier 2 ----
     g.add_edge("retrieve", "score")
     g.add_edge("score", "decide")
 
-    # ---- decision routing ----
+    # ---- Decision routing ----
     g.add_conditional_edges(
         "decide",
         route_after_decision,
@@ -168,10 +180,35 @@ def build_agent_graph(cache: VectorCache, memory: ChatMemory):
 
 
 # =================================================
-# Public runner
+# Chat Loop (persistent cache + memory)
 # =================================================
 
-def run_agent(query: str, cache: VectorCache, memory: ChatMemory) -> AgentState:
+def run_agent_loop():
+    """
+    Interactive chat loop.
+
+    - VectorCache persists across turns
+    - ChatMemory persists across turns
+    - AgentState is created inside the graph
+    """
+
+    cache = VectorCache()
+    memory = ChatMemory()
+
     graph = build_agent_graph(cache, memory)
-    state = init_state_node(query)
-    return graph.invoke(state)
+
+    print("🔬 Agent ready. Type 'exit' to quit.\n")
+
+    while True:
+        query = input("You: ").strip()
+        if not query or query.lower() == "exit":
+            break
+
+        state = graph.invoke({"query": query})
+
+        print("\nAgent:", state["final_answer"])
+        print(
+            f"(stop_reason={state['stop_reason']}, "
+            f"api_calls={state['api_calls']}, "
+            f"cache_hit={state['cache_hit']})\n"
+        )
