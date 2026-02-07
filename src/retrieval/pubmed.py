@@ -151,7 +151,7 @@ def _fetch_pubmed_docs(query: str, retmax: int, offset: int,) -> List[Dict[str, 
 def pubmed_fetch_node(
     state: AgentState,
     cache: VectorCache,
-    retmax: int = 5,
+    retmax: int = 2,
 ) -> AgentState:
     """
     Tier 3 ingestion node.
@@ -175,7 +175,9 @@ def pubmed_fetch_node(
     state["api_calls"] += 1
 
     if not docs:
+        state["evidence_exhausted"] = True
         return state
+
 
     chunk_texts: List[str] = []
     chunk_embeddings: List[np.ndarray] = []

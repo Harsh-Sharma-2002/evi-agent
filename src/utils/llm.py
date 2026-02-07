@@ -1,16 +1,16 @@
-from typing import List
-import os
-from dotenv import load_dotenv
-import numpy as np
+from typing import List, Optional
+import gc
 
+import torch
 from sentence_transformers import SentenceTransformer
-from huggingface_hub import InferenceClient
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
 from agent.state import AgentState
 
-load_dotenv()
 
+# =================================================
 # Embedding model (LOCAL)
-
+# =================================================
 
 _EMBED_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 _embed_model: SentenceTransformer | None = None
@@ -34,41 +34,63 @@ def embed(text: str) -> List[float]:
 
 
 # =================================================
-# LLM (HF Inference Router – CORRECT WAY)
+# Local LLM (FLAN-T5, NO pipeline)
 # =================================================
 
-HF_TOKEN = os.environ.get("_HF_TOKEN") 
-if not HF_TOKEN:
-    raise RuntimeError("HUGGINGFACE_API_KEY / HF_TOKEN not found in environment")
+_LLM_MODEL_NAME = "google/flan-t5-base"
+_llm_model = None
+_llm_tokenizer = None
 
-# This client automatically routes to the correct provider
-_llm_client = InferenceClient(
-    model="HuggingFaceH4/zephyr-7b-beta",
-    token=HF_TOKEN,
-)
+
+def _get_llm():
+    """
+    Lazy-load FLAN-T5 model and tokenizer.
+    """
+    global _llm_model, _llm_tokenizer
+    if _llm_model is None or _llm_tokenizer is None:
+        _llm_tokenizer = AutoTokenizer.from_pretrained(_LLM_MODEL_NAME)
+        _llm_model = AutoModelForSeq2SeqLM.from_pretrained(_LLM_MODEL_NAME)
+        _llm_model.eval()
+    return _llm_model, _llm_tokenizer
+
+
+def unload_llm():
+    """
+    Explicitly unload the local LLM to free RAM.
+    """
+    global _llm_model, _llm_tokenizer
+    _llm_model = None
+    _llm_tokenizer = None
+    gc.collect()
 
 
 def call_llm(
     state: AgentState,
     prompt: str,
     max_new_tokens: int = 256,
+     node_name: Optional[str] = None,
 ) -> str:
     """
-    Call Mistral-7B-Instruct via Hugging Face Inference Router
-    using CHAT COMPLETION (required for this model).
+    Local FLAN-T5 inference (CPU, deterministic).
     """
+    model, tokenizer = _get_llm()
 
-    response = _llm_client.chat_completion(
-        messages=[
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
-        max_tokens=max_new_tokens,
-        temperature=0.0,
+    inputs = tokenizer(
+        prompt,
+        return_tensors="pt",
+        truncation=True,
     )
 
-    # HF returns structured chat output
-    return response.choices[0].message.content.strip()
+    with torch.no_grad():
+        output_ids = model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+        )
 
+    text = tokenizer.decode(
+        output_ids[0],
+        skip_special_tokens=True,
+    )
+
+    return text.strip()

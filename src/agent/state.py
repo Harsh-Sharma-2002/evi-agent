@@ -50,4 +50,6 @@ class AgentState(TypedDict):
     # Tier 1: Query cache interaction
     cache_hit: bool                   # whether query cache was used
     cache_payload: Optional[Dict[str, Any]]  # reusable payload (answer, evidence, etc.)
+    evidence_exhausted: bool
+
 

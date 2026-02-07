@@ -7,7 +7,9 @@ from agent.state import AgentState
 from agent.decisions import decision_node, should_cache
 
 from retrieval.cache import VectorCache
-from retrieval.pubmed import pubmed_fetch_node
+# from retrieval.pubmed import pubmed_fetch_node
+from retrieval.mock_doc import mock_fetch_node as pubmed_fetch_node
+
 from retrieval.context_builder import context_expansion_node
 from scoring.score import score_node
 
@@ -21,12 +23,8 @@ from utils.memory import ChatMemory
 # =================================================
 
 def init_state_node(state: dict) -> AgentState:
-    """
-    Entry node.
+    print("[ENTER NODE] init_state_node")
 
-    Input state: { "query": str }
-    Output state: fully initialized AgentState
-    """
     query = state["query"]
 
     return {
@@ -54,10 +52,13 @@ def init_state_node(state: dict) -> AgentState:
 
         "cache_hit": False,
         "cache_payload": None,
+        "evidence_exhausted": False,
     }
 
 
 def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
+    print("[ENTER NODE] query_cache_node")
+
     result = cache.search_query(state["query_embedding"])
     if result is None:
         state["cache_hit"] = False
@@ -71,6 +72,8 @@ def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
 
 
 def chunk_store_search_node(state: AgentState, cache: VectorCache) -> AgentState:
+    print("[ENTER NODE] chunk_store_search_node")
+
     state["anchor_chunks"] = cache.search_chunks(
         query_embedding=state["query_embedding"]
     )
@@ -78,22 +81,32 @@ def chunk_store_search_node(state: AgentState, cache: VectorCache) -> AgentState
 
 
 def pubmed_node(state: AgentState, cache: VectorCache) -> AgentState:
+    print("[ENTER NODE] pubmed_fetch_node")
+
     state = pubmed_fetch_node(state, cache)
     state["iteration"] += 1  # iteration == number of PubMed fetches
     return state
 
 
 def prompt_node(state: AgentState, memory: ChatMemory) -> AgentState:
+    print("[ENTER NODE] prompt_node")
+
     prompt = build_final_prompt(
         state,
         chat_memory=memory.get_memory_context(),
     )
-    state["final_answer"] = call_llm(state, prompt)
+    state["final_answer"] = call_llm(
+        state,
+        prompt,
+        node_name="prompt_node",
+    )
     memory.update(state)
     return state
 
 
 def cache_write_node(state: AgentState, cache: VectorCache) -> AgentState:
+    print("[ENTER NODE] cache_write_node")
+
     if should_cache(state):
         cache.add_query(
             query=state["query"],
