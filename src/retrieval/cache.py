@@ -39,7 +39,7 @@ class VectorCache:
 
     def __init__(
         self,
-       query_similarity_threshold: float = 0.75,
+       query_similarity_threshold: float = 0.4,
        chunk_similarity_threshold:float = 0.3,
         max_query_items: int = 200,
         ttl_seconds: int = 48 * 3600,

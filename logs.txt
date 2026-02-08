@@ -185,3 +185,406 @@ Retrieval Score: 0.2778538516853692
 Number of Documents: 2
 ==============================
 
+
+==============================
+Timestamp: 2026-02-08 16:13:33
+
+Query:
+what is hypoxia?
+
+Final Answer:
+high altitude
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 8
+Total Reuse Events: 8
+
+--- API Usage ---
+API Calls Used: 3
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 4
+Anchor Chunks Selected: 3
+
+--- Retrieval Quality ---
+Retrieval Score: 0.2971404079695098
+Number of Documents: 2
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:13:43
+
+Query:
+what is hypoxia?
+
+Final Answer:
+high altitude
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 6
+Total Reuse Events: 6
+
+--- API Usage ---
+API Calls Used: 1
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 7
+Anchor Chunks Selected: 3
+
+--- Retrieval Quality ---
+Retrieval Score: 0.2971404079695098
+Number of Documents: 2
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:14:50
+
+Query:
+what is hypoxia
+
+Final Answer:
+high altitude
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 8
+Total Reuse Events: 8
+
+--- API Usage ---
+API Calls Used: 3
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 4
+Anchor Chunks Selected: 3
+
+--- Retrieval Quality ---
+Retrieval Score: 0.29272211276645205
+Number of Documents: 2
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:14:57
+
+Query:
+what is hypoxia
+
+Final Answer:
+high altitude
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 6
+Total Reuse Events: 6
+
+--- API Usage ---
+API Calls Used: 1
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 7
+Anchor Chunks Selected: 3
+
+--- Retrieval Quality ---
+Retrieval Score: 0.29272211276645205
+Number of Documents: 2
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:15:08
+
+Query:
+what is hypothermia
+
+Final Answer:
+mild-to-severe hypoxic-ischaemic encephalopathy
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 5
+Total Reuse Events: 5
+
+--- API Usage ---
+API Calls Used: 3
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 15
+Anchor Chunks Selected: 2
+
+--- Retrieval Quality ---
+Retrieval Score: 0.2778538516853692
+Number of Documents: 2
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:15:22
+
+Query:
+what is an MRI?
+
+Final Answer:
+Do NOT use prior knowledge.
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 2
+Total Reuse Events: 2
+
+--- API Usage ---
+API Calls Used: 1
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 15
+Anchor Chunks Selected: 1
+
+--- Retrieval Quality ---
+Retrieval Score: 0.1649970940516905
+Number of Documents: 1
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:15:30
+
+Query:
+MRI
+
+Final Answer:
+If evidence is insufficient or conflicting, say so clearly.
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 2
+Total Reuse Events: 2
+
+--- API Usage ---
+API Calls Used: 1
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 15
+Anchor Chunks Selected: 1
+
+--- Retrieval Quality ---
+Retrieval Score: 0.1696148015598297
+Number of Documents: 1
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:15:52
+
+Query:
+epilepsy prognosis
+
+Final Answer:
+Intractable epilepsy in pediatrics: a prospective, prospective, and prospective study.
+
+Stop Reason: max_iterations
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 23
+Total Reuse Events: 23
+
+--- API Usage ---
+API Calls Used: 4
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 24
+Anchor Chunks Selected: 8
+
+--- Retrieval Quality ---
+Retrieval Score: 0.5853608064727239
+Number of Documents: 7
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:16:01
+
+Query:
+epilepsy
+
+Final Answer:
+Answer ONLY using the provided evidence.
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 16
+Total Reuse Events: 16
+
+--- API Usage ---
+API Calls Used: 1
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 25
+Anchor Chunks Selected: 8
+
+--- Retrieval Quality ---
+Retrieval Score: 0.5911340669612865
+Number of Documents: 7
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:16:11
+
+Query:
+epilepsy
+
+Final Answer:
+Answer ONLY using the provided evidence.
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 16
+Total Reuse Events: 16
+
+--- API Usage ---
+API Calls Used: 1
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 26
+Anchor Chunks Selected: 8
+
+--- Retrieval Quality ---
+Retrieval Score: 0.5767855288434314
+Number of Documents: 6
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:16:20
+
+Query:
+what is epilepsy?
+
+Final Answer:
+epilepsy
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 15
+Total Reuse Events: 15
+
+--- API Usage ---
+API Calls Used: 1
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 27
+Anchor Chunks Selected: 7
+
+--- Retrieval Quality ---
+Retrieval Score: 0.5613077074279479
+Number of Documents: 6
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:18:15
+
+Query:
+MRI biomarkers for glioblastoma prognosis
+
+Final Answer:
+GBM as the most common and aggressive primary brain cancer in adults.
+
+Stop Reason: score_threshold_met
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 22
+Total Reuse Events: 22
+
+--- API Usage ---
+API Calls Used: 3
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 1
+Chunk Store Size: 36
+Anchor Chunks Selected: 8
+
+--- Retrieval Quality ---
+Retrieval Score: 0.6227556137082624
+Number of Documents: 6
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 16:18:19
+
+Query:
+MRI biomarkers for glioblastoma prognosis
+
+Final Answer:
+GBM as the most common and aggressive primary brain cancer in adults.
+
+Stop Reason: None
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 1
+Chunk Store Hits (Tier-2): 0
+Total Reuse Events: 1
+
+--- API Usage ---
+API Calls Used: 0
+API Calls Saved: 1
+
+--- Memory State ---
+Query Cache Size: 1
+Chunk Store Size: 0
+Anchor Chunks Selected: 0
+
+--- Retrieval Quality ---
+Retrieval Score: 0.0
+Number of Documents: 0
+==============================
+

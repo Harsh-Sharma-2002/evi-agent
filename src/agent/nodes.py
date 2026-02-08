@@ -11,25 +11,10 @@ from utils.prompt import build_final_prompt
 from utils.memory import ChatMemory
 from typing import Dict, List
 from collections import defaultdict
-from scoring.score import recency_score, similarity_score, doc_diversity_bonus
-from agent.decisions import is_stagnating
+from scoring.score import compute_retrieval_score
+from agent.decisions import decide_action
 
 
-
-
-# Scoring hyperparameters
-RECENCY_HALFLIFE_YEARS = 8          # publication age decay
-MIN_DOCS_FOR_CONFIDENCE = 2         # hard confidence gate
-MAX_SCORE = 1.0                    # upper bound for retrieval score
-
-# Decisions hyperparameters 
-STOP_SCORE_THRESHOLD = 0.6 # Min confidence to stop
-MIN_CACHE_SCORE = 0.6 # Min quality to reuse later ie enter in cache  
-
-MAX_ITERATIONS = 4 # prevent excess looping
-MAX_API_CALLS = 5 # API call control else it would keep calling and exceed rate limit
-
-STAGNATION_TOLERATION = 0.02 # If after calls no better result then stop and say I dont know man
 
 # =================================================
 # Graph Nodes
@@ -176,137 +161,42 @@ def score_node(state: AgentState) -> AgentState:
     """
     LangGraph node.
 
-    - Consumes state["anchor_chunks"] (from Tier 2 or Tier 3)
-    - This node is TIER-AGNOSTIC :- it does not care where the chunks came from.
+    - Calls pure scoring helper
+    - Mutates AgentState
+    - Tracks score evolution for stagnation detection
     """
 
-    anchor_chunks = state["anchor_chunks"]
+    result = compute_retrieval_score(state["anchor_chunks"])
 
-
-    # No evidence case (valid outcome, not an error)
-    if not anchor_chunks:
-        state["retrieval_score"] = 0.0
-        state["num_docs"] = 0
-        state["doc_scores"] = {}
-        state["confident"] = False
-
-        # Track score evolution for stagnation detection
-        state["prev_retrieval_scores"].append(0.0)
-        return state
-
-    # Accumulate chunk-level scores per document
-    doc_scores_accumulator: Dict[str, List[float]] = defaultdict(list)
-
-    for chunk in anchor_chunks:
-        meta = chunk.get("metadata", {})
-        pmid = meta.get("pmid")
-
-        if pmid is None:
-            continue
-
-        sim = similarity_score(chunk.get("similarity", 0.0))
-        year = meta.get("year")
-
-        chunk_score = (
-            0.7 * sim +
-            0.3 * recency_score(year)
-        )
-
-        doc_scores_accumulator[pmid].append(chunk_score)
-
-
-    # Collapse chunks → per-document score (max)
-    doc_scores: Dict[str, float] = {
-        pmid: max(scores)
-        for pmid, scores in doc_scores_accumulator.items()
-    }
-
-    num_docs = len(doc_scores)
-
-    if num_docs == 0:
-        state["retrieval_score"] = 0.0
-        state["num_docs"] = 0
-        state["doc_scores"] = {}
-        state["confident"] = False
-
-        state["prev_retrieval_scores"].append(0.0)
-        return state
-
-    # Aggregate document-level evidence
-    avg_doc_score = sum(doc_scores.values()) / num_docs
-    diversity = doc_diversity_bonus(num_docs)
-
-    retrieval_score = min(
-        MAX_SCORE,
-        avg_doc_score * diversity
-    )
-
-    confident = num_docs >= MIN_DOCS_FOR_CONFIDENCE
-
-    # Update agent state
-    state["retrieval_score"] = retrieval_score
-    state["num_docs"] = num_docs
-    state["doc_scores"] = doc_scores
-    state["confident"] = confident
+    state["retrieval_score"] = result["retrieval_score"]
+    state["num_docs"] = result["num_docs"]
+    state["doc_scores"] = result["doc_scores"]
+    state["confident"] = result["confident"]
 
     # Track score evolution for stagnation detection
-    state["prev_retrieval_scores"].append(retrieval_score)
+    state["prev_retrieval_scores"].append(
+        state["retrieval_score"]
+    )
 
     return state
+
 #####################################################################################
+
+
 
 def decision_node(state: AgentState) -> AgentState:
     """
-    - LangGraph node.
-    - Decides whether the agent should STOP or FETCH_MORE
-    based on current state, and records the reason in
-    state["stop_reason"].
-    - This node is Tier-agnostic, stateless beyond AgentState
+    LangGraph node.
+
+    - Delegates decision policy to pure helper
+    - Applies decision to AgentState
     """
-     
-    # Tier 1: Cache hit → immediate stop
 
-    # Hard safety limits (override everything)
-    if state["iteration"] >= MAX_ITERATIONS:
-        state["decision"] = "STOP"
-        state["stop_reason"] = "max_iterations"
-        return state
+    result = decide_action(state)
 
-    if state["api_calls"] >= MAX_API_CALLS:
-        state["decision"] = "STOP"
-        state["stop_reason"] = "api_limit"
-        return state
+    state["decision"] = result["decision"]
+    state["stop_reason"] = result["stop_reason"]
 
-    # No evidence and exhausted
-    if state["num_docs"] == 0 and state["evidence_exhausted"]:
-        state["decision"] = "STOP"
-        state["stop_reason"] = "no_evidence"
-        return state
-    
-    # No evidence yet → must fetch more
-    if state["num_docs"] == 0:
-        state["decision"] = "FETCH_MORE"
-        state["stop_reason"] = None
-        return state
-
-
-    # Stagnation detection 
-    if is_stagnating(state["prev_retrieval_scores"]):
-        state["decision"] = "STOP"
-        state["stop_reason"] = "stagnation"
-        return state
-
-    # Quality-based stopping rule (happy path)
-    if (
-        state["retrieval_score"] >= STOP_SCORE_THRESHOLD
-        and state["confident"]
-    ):
-        state["decision"] = "STOP"
-        state["stop_reason"] = "score_threshold_met"
-        return state
-
-    # Otherwise → fetch more evidence
-    state["decision"] = "FETCH_MORE"
-    state["stop_reason"] = None
     return state
+
 

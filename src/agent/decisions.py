@@ -1,5 +1,5 @@
 from  .state import AgentState
-from typing import List
+from typing import List, Dict, Any, Optional
 
 
 STOP_SCORE_THRESHOLD = 0.6 # Min confidence to stop
@@ -33,3 +33,42 @@ def should_cache(state: AgentState) -> bool:
     are admitted.
     """
     return ( state["decision"] == "STOP" and state["stop_reason"] == "score_threshold_met" and state["api_calls"] > 0 and state["retrieval_score"] >= MIN_CACHE_SCORE and state["num_docs"] >= 1 )
+    
+
+def decide_action(state: Dict[str, Any]) -> Dict[str, Optional[str]]:
+    """
+    PURE decision policy.
+
+    Input: read-only snapshot of agent state
+    Output:
+        {
+            "decision": "STOP" | "FETCH_MORE",
+            "stop_reason": Optional[str]
+        }
+    """
+
+    # Hard safety limits
+    if state["iteration"] >= MAX_ITERATIONS:
+        return {"decision": "STOP", "stop_reason": "max_iterations"}
+
+    if state["api_calls"] >= MAX_API_CALLS:
+        return {"decision": "STOP", "stop_reason": "api_limit"}
+
+    # No evidence and exhausted
+    if state["num_docs"] == 0 and state["evidence_exhausted"]:
+        return {"decision": "STOP", "stop_reason": "no_evidence"}
+
+    # No evidence yet → must fetch more
+    if state["num_docs"] == 0:
+        return {"decision": "FETCH_MORE", "stop_reason": None}
+
+    # Stagnation detection
+    if is_stagnating(state["prev_retrieval_scores"]):
+        return {"decision": "STOP", "stop_reason": "stagnation"}
+
+    # Quality-based stopping rule (happy path)
+    if state["retrieval_score"] >= STOP_SCORE_THRESHOLD and state["confident"]:
+        return {"decision": "STOP", "stop_reason": "score_threshold_met"}
+
+    # Otherwise → fetch more evidence
+    return {"decision": "FETCH_MORE", "stop_reason": None}
