@@ -1,337 +1,322 @@
-### Caching Logic
+# Agentic Evidence Retrieval System (Scientific Literature)
 
+## Overview
 
-cache.py — Hybrid Vector Cache Design & Rationale
-Purpose of this file
+This project implements a **minimal but explicit agentic system** for evidence-grounded question answering over scientific literature (e.g., PubMed abstracts).
 
-cache.py implements the memory subsystem for an agentic retrieval system that operates over scientific literature (e.g., PubMed abstracts).
+Unlike prompt-based RAG pipelines, this system is designed as a **stateful agent** with:
 
-Its job is not to reason, score, or decide.
+- Explicit control flow  
+- Hybrid memory (short-term, long-term, semantic)  
+- Tool use (external retrieval)  
+- Policy-driven stopping and reuse  
+- Clear separation between **policy** and **mechanism**
 
-Its job is to store and retrieve semantic memory safely and efficiently, so that the agent can:
+The goal of this project is **not answer quality or UI polish**, but to explore **agent architecture, control, memory, and robustness**.
 
-avoid redundant API calls
+This repository is intentionally verbose and inspectable, prioritizing **clarity over abstraction**.
 
-reuse high-quality past results
+---
 
-retrieve precise context when needed
+## What Makes This Agentic (Not Just RAG)
 
-scale without memory pollution
+This system crosses from a pipeline into an **agent** because it:
 
-This file is intentionally policy-free.
-All decisions about what to cache or when to reuse are made by the agent logic, not here.
+- Decides **whether to act or stop**
+- Iteratively gathers evidence
+- Tracks internal state across steps
+- Uses memory to avoid redundant work
+- Can terminate with *“insufficient evidence”*
+- Separates **decision logic** from **execution mechanisms**
 
-High-level design
+In short:
 
-This cache implements a hybrid memory model with two distinct layers:
+> The system reasons about *what to do next*, not just *how to answer*.
 
-1. Query Cache (coarse-grained, decision memory)
+---
 
-One vector per query
-
-Represents a solved intent, not raw documents
-
-Used to answer:
-
-“Have I already answered something like this?”
-
-This enables:
-
-early exit
-
-API cost reduction
-
-deterministic stopping behavior
-
-2. Chunk Store (fine-grained, context memory)
-
-Many vectors per document
-
-Each vector represents a large semantic chunk of an abstract
-
-Used to answer:
-
-“Which exact parts of the documents are relevant?”
-
-This enables:
-
-higher semantic precision
-
-better context selection
-
-chunk-level diversity across documents
-
-These two layers solve different problems and must not be merged.
-
-Why a hybrid approach is required
-
-Using only query-level caching causes semantic dilution
-Using only chunk-level vectors causes loss of control and no stopping signal
-
-The hybrid design separates concerns cleanly:
-
-Query cache controls agent behavior
-Chunk store controls answer quality
-
-This mirrors how real retrieval systems work in production.
-
-Responsibilities of VectorCache
-What this file DOES
-
-Stores embeddings in ChromaDB
-
-Enforces:
-
-cosine similarity threshold
-
-TTL (time-to-live)
-
-LRU eviction (query cache only)
-
-Performs bounded, monotonic search
-
-Provides:
-
-query reuse lookup
-
-chunk-level semantic retrieval with diversity control
-
-What this file DOES NOT do
-
-Decide whether a query should be cached
-
-Score evidence quality
-
-Track API usage
-
-Handle conversation memory
-
-Expand context windows
-
-Control agent loops or stopping criteria
-
-All of that belongs elsewhere in the agent.
-
-Query Cache: detailed behavior
-What is stored
-
-Each query cache entry stores:
-
-{
-  "embedding": <query_embedding>,
-  "metadata": {
-    "query": "<original text>",
-    "created_at": <timestamp>,
-    "payload": {
-      "docs": [...],
-      "chunks": [...],
-      "retrieval_score": <float>,
-      "answer": "<optional>",
-      "citations": [...]
-    }
-  }
-}
-
-
-The payload is the reusable unit, not the query string.
-
-How lookup works
-
-When a new query arrives:
-
-Embed the query
-
-Search for the top N most similar cached queries (default N = 3)
-
-For each candidate (in descending similarity order):
-
-If similarity < threshold → stop (monotonic guarantee)
-
-If expired → delete and continue
-
-If valid → return payload immediately
-
-If none valid → cache miss
-
-This bounded fallback prevents:
-
-false misses due to expiration
-
-scanning the entire cache
-
-reuse of weakly related queries
-
-TTL and LRU
-
-TTL ensures scientific freshness
-
-LRU ensures bounded memory usage
-
-LRU eviction applies only to query cache entries, because:
-
-query cache is decision memory
-
-chunk store is reference memory
-
-Chunk Store: detailed behavior
-What is stored
-
-Each chunk entry represents a large semantic unit, not a sentence:
-
-{
-  "embedding": <chunk_embedding>,
-  "document": "<chunk_text>",
-  "metadata": {
-    "pmid": "<document_id>",
-    "chunk_index": <int>,
-    "section": "<optional>"
-  }
-}
-
-
-Chunk size is intentionally large (≈200–350 tokens) to avoid:
-
-excessive homogeneity
-
-multiple tiny chunks from the same document
-
-artificial evidence inflation
-
-How chunk retrieval works
-
-Query Chroma for top-k chunks
-
-Iterate in similarity order
-
-Early-exit once similarity drops below threshold
-
-Enforce per-document chunk limits
-
-Optionally require a minimum number of chunks
-
-Return only anchor chunks
-
-These anchor chunks represent where the evidence lives.
-
-They are not yet expanded for context.
-
-Why context window expansion is NOT here
-
-Context window expansion is a presentation concern, not a retrieval concern.
-
-Retrieval answers:
-
-“Which chunks are relevant?”
-
-Context expansion answers:
-
-“How much surrounding text should I show?”
-
-Therefore:
-
-expansion happens after scoring
-
-expansion happens after agent decides to stop
-
-expansion lives in a separate context_builder.py
-
-Keeping this separation:
-
-preserves clean similarity math
-
-avoids polluting scoring signals
-
-keeps cache semantics simple
-
-Similarity thresholds
-
-Similarity thresholds are configurable
-
-Chunk retrieval can optionally use a looser threshold
-
-Query cache reuse should be strict
-
-This flexibility allows:
-
-conservative reuse
-
-exploratory retrieval
-
-safe agent control
-
-Important architectural rules
-
-Query cache is intent-level memory
-
-Chunk store is content-level memory
-
-Cache does not decide admission
-
-Agent decides what is worth remembering
-
-Expired entries are deleted eagerly
-
-Monotonic similarity enables early exit
-
-Diversity constraints prevent evidence collapse
-
-Violating these rules leads to brittle, unscalable systems.
-
-How this file fits into the full agent
-
-Execution order (simplified):
+## High-Level Agent Loop
 
 User Query
-  ↓
-Embed query
-  ↓
-Query Cache lookup (this file)
-  ↓ hit
-Return cached payload
-  ↓ miss
-Retrieve documents
-  ↓
-Chunk documents
-  ↓
-Add chunks to chunk store (this file)
-  ↓
-Search chunks (this file)
-  ↓
-Score evidence
-  ↓
-Agent decides stop / fetch more
-  ↓ stop
-Context window expansion (elsewhere)
-  ↓
-Final synthesis
-  ↓
-Agent may add query to cache (this file)
+↓
+Initialize Agent State
+↓
+Tier 1: Query Cache Lookup
+↓
+[Cache Hit] → Prompt + Answer
+↓
+[Cache Miss]
+↓
+Tier 2: Chunk Store Search
+↓
+Score Evidence
+↓
+Decision Policy
+├─ STOP → Context Expansion → Final Answer → Cache Admission
+└─ FETCH_MORE → Tier 3: External Retrieval (PubMed) → Loop
 
-Why this design scales
 
-Memory remains bounded
+The loop is **explicit, bounded, and policy-driven**.
 
-Similarity stays meaningful
+---
 
-Cache reuse is safe
+## Architectural Principles
 
-Agent behavior is deterministic
+### 1. Separation of Policy and Mechanism
 
-Chunk retrieval stays precise
+- **Policies** decide *what should happen*
+- **Mechanisms** implement *how it happens*
 
-Future extensions (persistent DB, full text, PDFs) are possible without rewriting this file
+Examples:
+- *Policy*: When to stop retrieving evidence  
+- *Mechanism*: Vector similarity search in ChromaDB  
 
-Summary (one paragraph)
+This separation allows policies to evolve (heuristics → learned policies) without rewriting infrastructure.
 
-cache.py implements a hybrid vector memory that cleanly separates decision reuse (query cache) from semantic precision (chunk store). It enforces TTL, LRU, similarity thresholds, and diversity constraints, while deliberately avoiding policy decisions. This design allows an agent to scale, stop safely, avoid redundant retrieval, and retrieve high-quality context without semantic dilution.
+---
 
-Chunk Structure
+### 2. State Is the Single Source of Truth
 
-    {
-        "text": "...",
-        "similarity": 0.60,
-        "metadata": {
-            "pmid": "12345",
-            "year": 2021
-        }
-    },
+All agent behavior is driven by a mutable `AgentState`, which tracks:
+
+- Retrieval progress
+- Evidence quality
+- Memory interactions
+- Cost and iteration limits
+- Termination reasons
+
+There is no hidden control logic.
+
+---
+
+### 3. Memory Has Multiple Time Horizons
+
+The agent uses **three distinct memory types**, each with a clear role.
+
+---
+
+## Memory Design
+
+### Tier 1: Query Cache (Decision Memory)
+
+**Purpose:**  
+Reuse previously solved intents safely and deterministically.
+
+**Characteristics:**
+- One vector per query
+- Stores *payloads*, not raw text
+- Enforced via:
+  - Cosine similarity threshold
+  - TTL (freshness)
+  - LRU eviction (bounded memory)
+
+**Key property:**  
+The cache is **policy-free** — it does not decide what is worth storing.
+
+The agent controls cache admission explicitly.
+
+---
+
+### Tier 2: Chunk Store (Semantic Memory)
+
+**Purpose:**  
+Provide high-precision semantic retrieval at the chunk level.
+
+**Characteristics:**
+- Many vectors per document
+- Large semantic chunks (≈200–350 tokens)
+- Enforces:
+  - Similarity threshold
+  - Monotonic early exit
+  - Per-document diversity constraints
+
+This avoids semantic dilution and evidence collapse.
+
+---
+
+### Conversational Memory (Summary-Only)
+
+**Purpose:**  
+Preserve high-level conversational context without polluting retrieval.
+
+**Characteristics:**
+- Stores a single rolling summary
+- Updated periodically via LLM
+- Injected optionally into prompts
+- Never stored in `AgentState`
+
+---
+
+## Retrieval Tiers
+
+### Tier 1: Query Cache Lookup
+
+- Checks if a similar query has already been solved
+- If valid:
+  - Skips retrieval
+  - Uses cached payload as reference context
+  - Still runs the LLM to answer independently
+
+Cache hits **do not force termination**.
+
+---
+
+### Tier 2: Chunk Store Search
+
+- Searches previously stored document chunks
+- Returns *anchor chunks* only
+- Anchor chunks represent where evidence lives
+- Context expansion happens later
+
+This tier enables reuse without full re-retrieval.
+
+---
+
+### Tier 3: External Retrieval (PubMed)
+
+- Fetches scientific abstracts via PubMed E-Utilities
+- Safe by construction:
+  - Never crashes
+  - Handles network / parse failures
+- Each document is chunked and embedded
+- New chunks are added to the chunk store
+
+This tier is **cost-aware and bounded**.
+
+---
+
+## Evidence Scoring
+
+Evidence is scored using a combination of:
+
+- Semantic similarity
+- Publication recency
+- Document-level aggregation
+- Diversity bonus across independent sources
+
+The result is a **single retrieval score** used by the agent’s policy.
+
+A hard confidence gate ensures:
+- Minimum number of distinct documents
+- No overconfidence from single-source evidence
+
+---
+
+## Decision Policy (Core Agent Logic)
+
+The agent decides between `STOP` and `FETCH_MORE` based on:
+
+- Maximum iterations
+- API call budget
+- Evidence exhaustion
+- Stagnation detection
+- Retrieval score threshold + confidence
+
+These rules are **explicit, inspectable, and deterministic**.
+
+This system intentionally uses **heuristic policies** rather than learned ones, to make control transparent.
+
+---
+
+## Context Expansion
+
+Once the agent decides to stop:
+
+- Anchor chunks are expanded with neighboring chunks
+- Expansion is deterministic and bounded
+- Happens **after** scoring and stopping
+
+This preserves clean similarity math and avoids context pollution.
+
+---
+
+## Prompt Construction
+
+The final prompt:
+
+- Enforces strict grounding rules
+- Injects:
+  - Expanded evidence
+  - Optional conversational memory
+  - Cached answer (reference-only, never copied)
+- Explicitly disallows hallucination
+
+The LLM is treated as a **synthesis mechanism**, not a decision-maker.
+
+---
+
+## Observability & Logging
+
+Every agent run is logged with:
+
+- Stop reason
+- Retrieval score
+- Evidence count
+- Cache reuse metrics
+- API usage
+
+Logs are **read-only diagnostics** and never influence behavior.
+
+---
+
+## Why the Cache Is Policy-Free
+
+The cache:
+- Stores vectors
+- Retrieves by similarity
+- Enforces TTL and LRU
+
+It does **not** decide:
+- Whether something is correct
+- Whether it should be cached
+- Whether it should be reused
+
+All such decisions belong to the agent.
+
+This mirrors real production systems and enables future research flexibility.
+
+---
+
+## Limitations (Intentional)
+
+This project is intentionally minimal:
+
+- No symbolic planning
+- No learned policies (e.g., RL)
+- No UI
+- Uses a small local LLM (FLAN-T5) for determinism
+
+The focus is **agent control and architecture**, not raw performance.
+
+---
+
+## Future Directions
+
+Possible extensions include:
+
+- Learned stopping policies
+- Planner / executor separation
+- Multi-agent collaboration
+- Persistent vector stores
+- Full-text and PDF ingestion
+- Benchmark-driven evaluation
+
+None of these require redesigning the cache or retrieval mechanisms.
+
+---
+
+## Summary
+
+This repository implements a **transparent, inspectable agentic retrieval system** with:
+
+- Explicit control flow
+- Hybrid memory
+- Policy-driven behavior
+- Safe tool use
+- Deterministic stopping
+
+It is designed as a **learning and research scaffold**, not a product.
+
+The core idea is simple:
+
+> The agent decides *what to do*; the system provides *how to do it*.
