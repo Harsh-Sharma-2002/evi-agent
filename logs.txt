@@ -1,0 +1,62 @@
+
+==============================
+Timestamp: 2026-02-07 19:32:43
+
+Query:
+prognosis of brain tumour
+
+Final Answer:
+S100A8/A9 levels are an independent prognostic factor for brain metastasis and poor clinical outcomes in patients with IBC.
+
+Stop Reason: max_iterations
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 24
+Total Reuse Events: 24
+
+--- API Usage ---
+API Calls Used: 4
+API Calls Saved: 20
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 12
+Anchor Chunks Selected: 8
+
+--- Retrieval Quality ---
+Retrieval Score: 0.5063462826071461
+Number of Documents: 6
+==============================
+
+
+==============================
+Timestamp: 2026-02-07 19:33:20
+
+Query:
+prognosis of heart attack
+
+Final Answer:
+In Japan, short periods of cardiac rehabilitation during hospitalization are important, and continued CR into the outpatient phase may further improve the prognosis of patients with AMI in Japan.
+
+Stop Reason: max_iterations
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 32
+Total Reuse Events: 32
+
+--- API Usage ---
+API Calls Used: 4
+API Calls Saved: 27
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 24
+Anchor Chunks Selected: 8
+
+--- Retrieval Quality ---
+Retrieval Score: 0.5052558666677602
+Number of Documents: 6
+==============================
+

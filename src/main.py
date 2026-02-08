@@ -9,6 +9,7 @@ Entry point for the agentic evidence retrieval system.
 from agent.graph import build_agent_graph
 from retrieval.cache import VectorCache
 from utils.memory import ChatMemory
+from utils.logging import log_agent_run
 
 
 def main():
@@ -39,6 +40,8 @@ def main():
 
         # Run agent (AgentState created inside graph)
         state = graph.invoke({"query": query})
+
+        log_agent_run(state)
 
         print("\nAgent:", state.get("final_answer", ""))
         print(

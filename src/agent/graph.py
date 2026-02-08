@@ -56,7 +56,9 @@ def init_state_node(state: dict) -> AgentState:
         "query_cache_size": 0,
         "chunk_store_size": 0,
         "num_anchor_chunks": 0,
-
+        "query_cache_hits": 0,
+        "chunk_store_hits": 0,
+        "api_calls_saved": 0,
     }
 
 
@@ -67,7 +69,13 @@ def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
     if result is None:
         state["cache_hit"] = False
         return state
+    
+    # Logging state variables
+    state["cache_hit"] = True
+    state["query_cache_hits"] += 1
+    state["api_calls_saved"] += 1
 
+    # Cache data retrieval  
     _, payload, _ = result
     state["cache_hit"] = True
     state["cache_payload"] = payload
@@ -89,6 +97,12 @@ def chunk_store_search_node(state: AgentState, cache: VectorCache) -> AgentState
     )
     state["anchor_chunks"] = chunks
 
+    # Tier-2 reuse events
+    chunk_hits = len(chunks)
+    state["chunk_store_hits"] += chunk_hits
+
+    # Conservative API savings: reuse avoids future fetches
+    state["api_calls_saved"] += max(0, chunk_hits - 1)
     # Memory diagnostics
     state["num_anchor_chunks"] = len(chunks)
     state["chunk_store_size"] = cache.chunk_collection.count()

@@ -56,4 +56,8 @@ class AgentState(TypedDict):
     query_cache_size: int
     chunk_store_size: int
     num_anchor_chunks: int
-
+    
+    # Logging variables
+    query_cache_hits: int        # Tier-1 reuse events
+    chunk_store_hits: int        # Tier-2 reuse events
+    api_calls_saved: int      
