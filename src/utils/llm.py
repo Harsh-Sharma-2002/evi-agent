@@ -8,9 +8,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from agent.state import AgentState
 
 
-# =================================================
 # Embedding model (LOCAL)
-# =================================================
 
 _EMBED_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 _embed_model: SentenceTransformer | None = None
@@ -64,12 +62,7 @@ def unload_llm():
     gc.collect()
 
 
-def call_llm(
-    state: AgentState,
-    prompt: str,
-    max_new_tokens: int = 256,
-     node_name: Optional[str] = None,
-) -> str:
+def call_llm(state: AgentState, prompt: str, max_new_tokens: int = 256, node_name: Optional[str] = None,) -> str:
     """
     Local FLAN-T5 inference (CPU, deterministic).
     """

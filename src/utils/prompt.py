@@ -50,9 +50,8 @@ Rules:
 - Be concise and factual.
 """.strip()
 
-    # -------------------------------------------------
+
     # Optional conversational memory
-    # -------------------------------------------------
     memory_block = ""
     if chat_memory:
         memory_block = f"""
@@ -60,9 +59,7 @@ Conversation Memory:
 {chat_memory}
 """.strip()
 
-    # -------------------------------------------------
     # Evidence block
-    # -------------------------------------------------
     if context_chunks:
         evidence_block = "\n\n".join(
             f"[Evidence {i+1}]\n{chunk}"
@@ -73,9 +70,8 @@ Conversation Memory:
             "No relevant evidence was retrieved for this question."
         )
 
-    # -------------------------------------------------
+  
     # Final prompt assembly
-    # -------------------------------------------------
     prompt = f"""
 {system_rules}
 

@@ -81,9 +81,8 @@ Updated memory:
         if new_summary:
             self.summary = new_summary.strip()
 
-    # ---------------------------------------------
+  
     # Memory access
-    # ---------------------------------------------
 
     def get_memory_context(self) -> Optional[str]:
         """

@@ -1,328 +1,20 @@
+
+
 ==============================
-Timestamp: 2026-02-07 19:52:47
+Timestamp: 2026-02-08 11:39:21
 
 Query:
-glioblastoma MRI prognosis
+prognosis of bradycardia
 
 Final Answer:
-ADC mapping is a noninvasive method for evaluating the prognosis of brain tumors, it is not a reliable tool for predicting the prognosis of brain tumors.
-
-Stop Reason: score_threshold_met
-
---- Reuse Accounting ---
-Query Cache Hits (Tier-1): 0
-Chunk Store Hits (Tier-2): 17
-Total Reuse Events: 17
-
---- API Usage ---
-API Calls Used: 3
-API Calls Saved: 0
-
---- Memory State ---
-Query Cache Size: 1
-Chunk Store Size: 11
-Anchor Chunks Selected: 8
-
---- Retrieval Quality ---
-Retrieval Score: 0.614809628798698
-Number of Documents: 6
-==============================
-
-
-==============================
-Timestamp: 2026-02-07 19:52:50
-
-Query:
-glioblastoma MRI prognosis
-
-Final Answer:
-ADC mapping is a noninvasive method for evaluating the prognosis of brain tumors, it is not a reliable tool for predicting the prognosis of brain tumors.
-
-Stop Reason: None
-
---- Reuse Accounting ---
-Query Cache Hits (Tier-1): 1
-Chunk Store Hits (Tier-2): 0
-Total Reuse Events: 1
-
---- API Usage ---
-API Calls Used: 0
-API Calls Saved: 1
-
---- Memory State ---
-Query Cache Size: 1
-Chunk Store Size: 0
-Anchor Chunks Selected: 0
-
---- Retrieval Quality ---
-Retrieval Score: 0.0
-Number of Documents: 0
-==============================
-
-
-==============================
-Timestamp: 2026-02-07 19:52:52
-
-Query:
-glioblastoma MRI prognosis
-
-Final Answer:
-ADC mapping is a noninvasive method for evaluating the prognosis of brain tumors, it is not a reliable tool for predicting the prognosis of brain tumors.
-
-Stop Reason: None
-
---- Reuse Accounting ---
-Query Cache Hits (Tier-1): 1
-Chunk Store Hits (Tier-2): 0
-Total Reuse Events: 1
-
---- API Usage ---
-API Calls Used: 0
-API Calls Saved: 1
-
---- Memory State ---
-Query Cache Size: 1
-Chunk Store Size: 0
-Anchor Chunks Selected: 0
-
---- Retrieval Quality ---
-Retrieval Score: 0.0
-Number of Documents: 0
-==============================
-
-
-==============================
-Timestamp: 2026-02-07 19:52:52
-
-Query:
-glioblastoma MRI prognosis
-
-Final Answer:
-ADC mapping is a noninvasive method for evaluating the prognosis of brain tumors, it is not a reliable tool for predicting the prognosis of brain tumors.
-
-Stop Reason: None
-
---- Reuse Accounting ---
-Query Cache Hits (Tier-1): 1
-Chunk Store Hits (Tier-2): 0
-Total Reuse Events: 1
-
---- API Usage ---
-API Calls Used: 0
-API Calls Saved: 1
-
---- Memory State ---
-Query Cache Size: 1
-Chunk Store Size: 0
-Anchor Chunks Selected: 0
-
---- Retrieval Quality ---
-Retrieval Score: 0.0
-Number of Documents: 0
-==============================
-
-
-==============================
-Timestamp: 2026-02-07 19:52:55
-
-Query:
-glioblastoma MRI prognosis
-
-Final Answer:
-ADC mapping is a noninvasive method for evaluating the prognosis of brain tumors, it is not a reliable tool for predicting the prognosis of brain tumors.
-
-Stop Reason: None
-
---- Reuse Accounting ---
-Query Cache Hits (Tier-1): 1
-Chunk Store Hits (Tier-2): 0
-Total Reuse Events: 1
-
---- API Usage ---
-API Calls Used: 0
-API Calls Saved: 1
-
---- Memory State ---
-Query Cache Size: 1
-Chunk Store Size: 0
-Anchor Chunks Selected: 0
-
---- Retrieval Quality ---
-Retrieval Score: 0.0
-Number of Documents: 0
-==============================
-
-
-==============================
-Timestamp: 2026-02-07 19:52:56
-
-Query:
-glioblastoma MRI prognosis
-
-Final Answer:
-ADC mapping is a noninvasive method for evaluating the prognosis of brain tumors, it is not a reliable tool for predicting the prognosis of brain tumors.
-
-Stop Reason: None
-
---- Reuse Accounting ---
-Query Cache Hits (Tier-1): 1
-Chunk Store Hits (Tier-2): 0
-Total Reuse Events: 1
-
---- API Usage ---
-API Calls Used: 0
-API Calls Saved: 1
-
---- Memory State ---
-Query Cache Size: 1
-Chunk Store Size: 0
-Anchor Chunks Selected: 0
-
---- Retrieval Quality ---
-Retrieval Score: 0.0
-Number of Documents: 0
-==============================
-
-
-==============================
-Timestamp: 2026-02-07 20:26:38
-
-Query:
-glioblastoma MRI prognosis
-
-Final Answer:
-ADC mapping is a noninvasive method for evaluating the prognosis of brain tumors, it is not a reliable tool for predicting the prognosis of brain tumors.
-
-Stop Reason: score_threshold_met
-
---- Reuse Accounting ---
-Query Cache Hits (Tier-1): 0
-Chunk Store Hits (Tier-2): 17
-Total Reuse Events: 17
-
---- API Usage ---
-API Calls Used: 3
-API Calls Saved: 0
-
---- Memory State ---
-Query Cache Size: 1
-Chunk Store Size: 11
-Anchor Chunks Selected: 8
-
---- Retrieval Quality ---
-Retrieval Score: 0.614809628798698
-Number of Documents: 6
-==============================
-
-
-==============================
-Timestamp: 2026-02-07 20:26:52
-
-Query:
-glioblastoma MRI prognosis
-
-Final Answer:
-ADC mapping is a noninvasive method for evaluating the prognosis of brain tumors, it is not a reliable tool for predicting the prognosis of brain tumors.
-
-Stop Reason: None
-
---- Reuse Accounting ---
-Query Cache Hits (Tier-1): 1
-Chunk Store Hits (Tier-2): 0
-Total Reuse Events: 1
-
---- API Usage ---
-API Calls Used: 0
-API Calls Saved: 1
-
---- Memory State ---
-Query Cache Size: 1
-Chunk Store Size: 0
-Anchor Chunks Selected: 0
-
---- Retrieval Quality ---
-Retrieval Score: 0.0
-Number of Documents: 0
-==============================
-
-
-==============================
-Timestamp: 2026-02-07 20:27:47
-
-Query:
-glioblastoma MRI prognosis
-
-Final Answer:
-ADC mapping is a noninvasive method for evaluating the prognosis of brain tumors, it is not a reliable tool for predicting the prognosis of brain tumors.
-
-Stop Reason: None
-
---- Reuse Accounting ---
-Query Cache Hits (Tier-1): 1
-Chunk Store Hits (Tier-2): 0
-Total Reuse Events: 1
-
---- API Usage ---
-API Calls Used: 0
-API Calls Saved: 1
-
---- Memory State ---
-Query Cache Size: 1
-Chunk Store Size: 0
-Anchor Chunks Selected: 0
-
---- Retrieval Quality ---
-Retrieval Score: 0.0
-Number of Documents: 0
-==============================
-
-
-==============================
-Timestamp: 2026-02-07 20:31:10
-
-Query:
-glioblastoma MRI prognosis
-
-Final Answer:
-Diffusion tensor imaging along the perivascular space and extracellular free water index are useful prognostic factors in glioblastoma.
+Carfilzomib-associated sinus bradycardia
 
 Stop Reason: stagnation
 
 --- Reuse Accounting ---
 Query Cache Hits (Tier-1): 0
-Chunk Store Hits (Tier-2): 15
-Total Reuse Events: 15
-
---- API Usage ---
-API Calls Used: 3
-API Calls Saved: 0
-
---- Memory State ---
-Query Cache Size: 0
-Chunk Store Size: 7
-Anchor Chunks Selected: 6
-
---- Retrieval Quality ---
-Retrieval Score: 0.5249677909893671
-Number of Documents: 4
-==============================
-
-
-==============================
-Timestamp: 2026-02-07 20:31:17
-
-Query:
-glioblastoma MRI prognosis
-
-Final Answer:
-A Whole-Brain Network-Based Grading Approach for Glioblastoma
-
-Stop Reason: stagnation
-
---- Reuse Accounting ---
-Query Cache Hits (Tier-1): 0
-Chunk Store Hits (Tier-2): 13
-Total Reuse Events: 13
+Chunk Store Hits (Tier-2): 12
+Total Reuse Events: 12
 
 --- API Usage ---
 API Calls Used: 1
@@ -330,11 +22,166 @@ API Calls Saved: 0
 
 --- Memory State ---
 Query Cache Size: 0
-Chunk Store Size: 11
+Chunk Store Size: 24
 Anchor Chunks Selected: 7
 
 --- Retrieval Quality ---
-Retrieval Score: 0.5249677909893671
-Number of Documents: 4
+Retrieval Score: 0.44872409277816366
+Number of Documents: 5
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 15:38:51
+
+Query:
+what is hypertension
+
+Final Answer:
+hypertension is a disease that causes a person to have hypertension.
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 2
+Total Reuse Events: 2
+
+--- API Usage ---
+API Calls Used: 1
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 28
+Anchor Chunks Selected: 1
+
+--- Retrieval Quality ---
+Retrieval Score: 0.14950621954351073
+Number of Documents: 1
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 15:39:03
+
+Query:
+what is hypertension
+
+Final Answer:
+hypertension is a disease that causes a person to have hypertension.
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 2
+Total Reuse Events: 2
+
+--- API Usage ---
+API Calls Used: 1
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 32
+Anchor Chunks Selected: 1
+
+--- Retrieval Quality ---
+Retrieval Score: 0.14950621954351073
+Number of Documents: 1
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 15:39:16
+
+Query:
+what is hypertension
+
+Final Answer:
+hypertension is a disease that causes a person to have hypertension.
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 2
+Total Reuse Events: 2
+
+--- API Usage ---
+API Calls Used: 1
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 36
+Anchor Chunks Selected: 1
+
+--- Retrieval Quality ---
+Retrieval Score: 0.14950621954351073
+Number of Documents: 1
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 15:57:17
+
+Query:
+what is hypothermia
+
+Final Answer:
+mild-to-severe hypoxic-ischaemic encephalopathy
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 5
+Total Reuse Events: 5
+
+--- API Usage ---
+API Calls Used: 3
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 8
+Anchor Chunks Selected: 2
+
+--- Retrieval Quality ---
+Retrieval Score: 0.2778538516853692
+Number of Documents: 2
+==============================
+
+
+==============================
+Timestamp: 2026-02-08 15:57:32
+
+Query:
+what is hypothermia
+
+Final Answer:
+ketosis/ketoacidosis, glucose, urine catecholamines, and toxicological factors
+
+Stop Reason: stagnation
+
+--- Reuse Accounting ---
+Query Cache Hits (Tier-1): 0
+Chunk Store Hits (Tier-2): 5
+Total Reuse Events: 5
+
+--- API Usage ---
+API Calls Used: 1
+API Calls Saved: 0
+
+--- Memory State ---
+Query Cache Size: 0
+Chunk Store Size: 10
+Anchor Chunks Selected: 3
+
+--- Retrieval Quality ---
+Retrieval Score: 0.2778538516853692
+Number of Documents: 2
 ==============================
 

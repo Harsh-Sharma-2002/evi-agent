@@ -47,7 +47,7 @@
 │   - LRU touch                                            │
 │                                                          │
 │ outputs:                                                 │
-│   state.cache_hit        (bool)                           │
+│   state.cache_hit        (bool)                          │
 │   state.cache_payload    (answer + metadata)             │
 │   state.query_cache_hits ++ (if hit)                     │
 │   state.api_calls_saved  ++ (if hit)                     │

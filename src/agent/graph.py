@@ -1,156 +1,14 @@
-import numpy as np
 from typing import Literal
-
 from langgraph.graph import StateGraph, END
-
 from agent.state import AgentState
-from agent.decisions import decision_node, should_cache
-
 from retrieval.cache import VectorCache
-from retrieval.pubmed import pubmed_fetch_node
 #from retrieval.mock_doc import mock_fetch_node as pubmed_fetch_node
-
 from retrieval.context_builder import context_expansion_node
-from scoring.score import score_node
-
-from utils.llm import embed, call_llm
-from utils.prompt import build_final_prompt
 from utils.memory import ChatMemory
+from agent.nodes import init_state_node, query_cache_node, cache_write_node, chunk_store_search_node, pubmed_node, prompt_node, score_node, decision_node
 
 
-# =================================================
-# Graph Nodes
-# =================================================
 
-def init_state_node(state: dict) -> AgentState:
-    print("[ENTER NODE] init_state_node")
-
-    query = state["query"]
-
-    return {
-        "query": query,
-        "query_embedding": np.asarray(embed(query)),
-
-        "iteration": 0,
-        "api_calls": 0,
-        "decision": None,
-        "stop_reason": None,
-        "prev_retrieval_scores": [],
-
-        "documents": [],
-        "doc_chunks_map": {},
-
-        "anchor_chunks": [],
-
-        "retrieval_score": 0.0,
-        "num_docs": 0,
-        "doc_scores": {},
-        "confident": False,
-
-        "expanded_context": None,
-        "final_answer": None,
-
-        "cache_hit": False,
-        "cache_payload": None,
-        "evidence_exhausted": False,
-        "query_cache_size": 0,
-        "chunk_store_size": 0,
-        "num_anchor_chunks": 0,
-        "query_cache_hits": 0,
-        "chunk_store_hits": 0,
-        "api_calls_saved": 0,
-    }
-
-
-def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
-    print("[ENTER NODE] query_cache_node")
-
-    result = cache.search_query(state["query_embedding"])
-    if result is None:
-        state["cache_hit"] = False
-        return state
-    
-    # Logging state variables
-    state["cache_hit"] = True
-    state["query_cache_hits"] += 1
-    state["api_calls_saved"] += 1
-
-    # Cache data retrieval  
-    _, payload, sim = result
-    state["cache_hit"] = True
-    state["cache_payload"] = payload
-    state["cache_payload"] = payload
-    state["cache_similarity"] = sim
-    state["query_cache_size"] = cache.query_collection.count()
-    return state
-
-
-def chunk_store_search_node(state: AgentState, cache: VectorCache) -> AgentState:
-    print("[ENTER NODE] chunk_store_search_node")
-
-    # Check for first retrieval 
-    if cache.chunk_collection.count() == 0:
-        state["anchor_chunks"] = []
-        return state
-
-    chunks = cache.search_chunks(
-        query_embedding=state["query_embedding"]
-    )
-    state["anchor_chunks"] = chunks
-
-    # Tier-2 reuse events
-    chunk_hits = len(chunks)
-    state["chunk_store_hits"] += chunk_hits
-
-    # Memory diagnostics
-    state["num_anchor_chunks"] = len(chunks)
-    state["chunk_store_size"] = cache.chunk_collection.count()
-
-    return state
-
-
-def pubmed_node(state: AgentState, cache: VectorCache) -> AgentState:
-    print("[ENTER NODE] pubmed_fetch_node")
-
-    state = pubmed_fetch_node(state, cache)
-    state["iteration"] += 1  # iteration == number of PubMed fetches
-    return state
-
-
-def prompt_node(state: AgentState, memory: ChatMemory) -> AgentState:
-    print("[ENTER NODE] prompt_node")
-
-    prompt = build_final_prompt(
-        state,
-        chat_memory=memory.get_memory_context(),
-    )
-    state["final_answer"] = call_llm(
-        state,
-        prompt,
-        node_name="prompt_node",
-    )
-    memory.update(state)
-    print(prompt)
-    return state
-
-
-def cache_write_node(state: AgentState, cache: VectorCache) -> AgentState:
-    print("[ENTER NODE] cache_write_node")
-
-    if should_cache(state):
-        cache.add_query(
-            query=state["query"],
-            embedding=state["query_embedding"],
-            payload={
-                "answer": state["final_answer"],
-                "doc_scores": state["doc_scores"],
-                "retrieval_score": state["retrieval_score"],
-                "num_docs": state["num_docs"],
-            },
-        )
-        # Cache dianostics
-        state["query_cache_size"] = cache.query_collection.count()
-    return state
 
 
 # =================================================
@@ -165,9 +23,8 @@ def route_after_decision(state: AgentState) -> Literal["stop", "fetch"]:
     return "stop" if state["decision"] == "STOP" else "fetch"
 
 
-# =================================================
 # Graph Builder
-# =================================================
+
 
 def build_agent_graph(cache: VectorCache, memory: ChatMemory):
     g = StateGraph(AgentState)
@@ -224,9 +81,8 @@ def build_agent_graph(cache: VectorCache, memory: ChatMemory):
     return g.compile()
 
 
-# =================================================
 # Chat Loop (persistent cache + memory)
-# =================================================
+
 
 def run_agent_loop():
     """

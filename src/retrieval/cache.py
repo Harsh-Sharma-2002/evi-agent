@@ -69,11 +69,7 @@ class VectorCache:
     # Tier 1: QUERY CACHE
    
 
-    def search_query(
-        self,
-        query_embedding: np.ndarray,
-        max_candidates: int = 3,
-    ) -> Optional[Tuple[str, Dict[str, Any], float]]:
+    def search_query(self, query_embedding: np.ndarray, max_candidates: int = 3,) -> Optional[Tuple[str, Dict[str, Any], float]]:
         """
         Search for a reusable cached query.
 
@@ -120,12 +116,7 @@ class VectorCache:
 
         return None
 
-    def add_query(
-        self,
-        query: str,
-        embedding: np.ndarray,
-        payload: Dict[str, Any],
-    ) -> None:
+    def add_query(self, query: str, embedding: np.ndarray, payload: Dict[str, Any],) -> None:
         """
         Add a solved query to the cache.
         Admission policy is enforced by the agent.
@@ -152,12 +143,7 @@ class VectorCache:
     # Tier 2: CHUNK STORE
 
 
-    def add_chunks(
-        self,
-        chunks: List[str],
-        embeddings: List[np.ndarray],
-        metadatas: List[Dict[str, Any]],
-    ) -> None:
+    def add_chunks(self, chunks: List[str], embeddings: List[np.ndarray], metadatas: List[Dict[str, Any]],) -> None:
         """
         Store document chunks (policy-free).
         Each metadata dict should include:
@@ -175,13 +161,7 @@ class VectorCache:
             metadatas=metadatas,
         )
 
-    def search_chunks(
-        self,
-        query_embedding: np.ndarray,
-        k: int = 8,
-        similarity_threshold: Optional[float] = None,
-        min_chunks: int = 1,
-    ) -> List[Dict[str, Any]]:
+    def search_chunks(self, query_embedding: np.ndarray, k: int = 8, similarity_threshold: Optional[float] = None, min_chunks: int = 1,) -> List[Dict[str, Any]]:
         """
         Retrieve anchor chunks (Tier 2).
 

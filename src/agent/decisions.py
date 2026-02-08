@@ -1,5 +1,5 @@
 from  .state import AgentState
-from typing import Literal,List
+from typing import List
 
 
 STOP_SCORE_THRESHOLD = 0.6 # Min confidence to stop
@@ -23,60 +23,6 @@ def is_stagnating(scores: List[float],tol: float = STAGNATION_TOLERATION) -> boo
     return abs(scores[-1] - scores[-2]) < tol
 
 
-def decision_node(state: AgentState) -> AgentState:
-    """
-    - LangGraph node.
-    - Decides whether the agent should STOP or FETCH_MORE
-    based on current state, and records the reason in
-    state["stop_reason"].
-    - This node is Tier-agnostic, stateless beyond AgentState
-    """
-     
-    # Tier 1: Cache hit → immediate stop
-
-    # Hard safety limits (override everything)
-    if state["iteration"] >= MAX_ITERATIONS:
-        state["decision"] = "STOP"
-        state["stop_reason"] = "max_iterations"
-        return state
-
-    if state["api_calls"] >= MAX_API_CALLS:
-        state["decision"] = "STOP"
-        state["stop_reason"] = "api_limit"
-        return state
-
-    # No evidence and exhausted
-    if state["num_docs"] == 0 and state["evidence_exhausted"]:
-        state["decision"] = "STOP"
-        state["stop_reason"] = "no_evidence"
-        return state
-    
-    # No evidence yet → must fetch more
-    if state["num_docs"] == 0:
-        state["decision"] = "FETCH_MORE"
-        state["stop_reason"] = None
-        return state
-
-
-    # Stagnation detection 
-    if is_stagnating(state["prev_retrieval_scores"]):
-        state["decision"] = "STOP"
-        state["stop_reason"] = "stagnation"
-        return state
-
-    # Quality-based stopping rule (happy path)
-    if (
-        state["retrieval_score"] >= STOP_SCORE_THRESHOLD
-        and state["confident"]
-    ):
-        state["decision"] = "STOP"
-        state["stop_reason"] = "score_threshold_met"
-        return state
-
-    # Otherwise → fetch more evidence
-    state["decision"] = "FETCH_MORE"
-    state["stop_reason"] = None
-    return state
 
 
 def should_cache(state: AgentState) -> bool:
