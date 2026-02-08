@@ -7,8 +7,8 @@ from agent.state import AgentState
 from agent.decisions import decision_node, should_cache
 
 from retrieval.cache import VectorCache
-# from retrieval.pubmed import pubmed_fetch_node
-from retrieval.mock_doc import mock_fetch_node as pubmed_fetch_node
+from retrieval.pubmed import pubmed_fetch_node
+#from retrieval.mock_doc import mock_fetch_node as pubmed_fetch_node
 
 from retrieval.context_builder import context_expansion_node
 from scoring.score import score_node
@@ -53,6 +53,10 @@ def init_state_node(state: dict) -> AgentState:
         "cache_hit": False,
         "cache_payload": None,
         "evidence_exhausted": False,
+        "query_cache_size": 0,
+        "chunk_store_size": 0,
+        "num_anchor_chunks": 0,
+
     }
 
 
@@ -68,15 +72,27 @@ def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
     state["cache_hit"] = True
     state["cache_payload"] = payload
     state["final_answer"] = payload.get("answer")
+    state["query_cache_size"] = cache.query_collection.count()
     return state
 
 
 def chunk_store_search_node(state: AgentState, cache: VectorCache) -> AgentState:
     print("[ENTER NODE] chunk_store_search_node")
 
-    state["anchor_chunks"] = cache.search_chunks(
+    # Check for first retrieval 
+    if cache.chunk_collection.count() == 0:
+        state["anchor_chunks"] = []
+        return state
+
+    chunks = cache.search_chunks(
         query_embedding=state["query_embedding"]
     )
+    state["anchor_chunks"] = chunks
+
+    # Memory diagnostics
+    state["num_anchor_chunks"] = len(chunks)
+    state["chunk_store_size"] = cache.chunk_collection.count()
+
     return state
 
 
@@ -101,6 +117,7 @@ def prompt_node(state: AgentState, memory: ChatMemory) -> AgentState:
         node_name="prompt_node",
     )
     memory.update(state)
+    print(prompt)
     return state
 
 
@@ -118,6 +135,8 @@ def cache_write_node(state: AgentState, cache: VectorCache) -> AgentState:
                 "num_docs": state["num_docs"],
             },
         )
+        # Cache dianostics
+        state["query_cache_size"] = cache.query_collection.count()
     return state
 
 

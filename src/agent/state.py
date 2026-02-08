@@ -52,4 +52,8 @@ class AgentState(TypedDict):
     cache_payload: Optional[Dict[str, Any]]  # reusable payload (answer, evidence, etc.)
     evidence_exhausted: bool
 
+    # Diagnostics (read-only, per run)
+    query_cache_size: int
+    chunk_store_size: int
+    num_anchor_chunks: int
 

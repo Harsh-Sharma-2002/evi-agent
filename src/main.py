@@ -44,8 +44,12 @@ def main():
         print(
             f"(stop_reason={state.get('stop_reason')}, "
             f"api_calls={state.get('api_calls')}, "
-            f"cache_hit={state.get('cache_hit')})\n"
+            f"cache_hit={state.get('cache_hit')}, "
+            f"query_cache_size={state.get('query_cache_size')}, "
+            f"chunk_store_size={state.get('chunk_store_size')}, "
+            f"anchor_chunks={state.get('num_anchor_chunks')})\n"
         )
+
 
 
 if __name__ == "__main__":

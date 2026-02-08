@@ -49,16 +49,18 @@ def decision_node(state: AgentState) -> AgentState:
         state["stop_reason"] = "api_limit"
         return state
 
+    # No evidence and exhausted
+    if state["num_docs"] == 0 and state["evidence_exhausted"]:
+        state["decision"] = "STOP"
+        state["stop_reason"] = "no_evidence"
+        return state
+    
     # No evidence yet → must fetch more
     if state["num_docs"] == 0:
         state["decision"] = "FETCH_MORE"
         state["stop_reason"] = None
         return state
 
-    if state["num_docs"] == 0 and state["evidence_exhausted"]:
-        state["decision"] = "STOP"
-        state["stop_reason"] = "no_evidence"
-        return state
 
     # Stagnation detection 
     if is_stagnating(state["prev_retrieval_scores"]):

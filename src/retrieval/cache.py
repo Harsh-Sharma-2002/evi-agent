@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import chromadb
 import numpy as np
 from chromadb.config import Settings
+import json
 
 
 """
@@ -38,7 +39,7 @@ class VectorCache:
 
     def __init__(
         self,
-        similarity_threshold: float = 0.82,
+        similarity_threshold: float = 0.2,
         max_query_items: int = 200,
         ttl_seconds: int = 48 * 3600,
         max_chunks_per_doc: int = 2,  # default updated for 2-chunk design
@@ -55,8 +56,10 @@ class VectorCache:
             )
         )
 
-        self.query_collection = self.client.get_or_create_collection(name="query_cache")
-        self.chunk_collection = self.client.get_or_create_collection(name="chunk_store")
+        self.query_collection = self.client.get_or_create_collection(name="query_cache",
+                                                                     metadata={"hnsw:space": "cosine"},)
+        self.chunk_collection = self.client.get_or_create_collection(name="chunk_store",
+                                                                     metadata={"hnsw:space": "cosine"},)
 
         # LRU applies ONLY to query cache
         self._lru: OrderedDict[str, float] = OrderedDict()
@@ -86,7 +89,7 @@ class VectorCache:
         results = self.query_collection.query(
             query_embeddings=[query_embedding.tolist()],
             n_results=max_candidates,
-            include=["ids", "metadatas", "distances"],
+            include=[ "metadatas", "distances"],
         )
 
         for cache_id, metadata, dist in zip(
@@ -110,6 +113,7 @@ class VectorCache:
 
             # deep copy to prevent mutation bugs
             payload = copy.deepcopy(metadata.get("payload", {}))
+            payload = json.loads(payload) if payload else {}
             return cache_id, payload, similarity
 
         return None
@@ -131,7 +135,7 @@ class VectorCache:
         metadata = {
             "query": query,
             "created_at": now,
-            "payload": payload,
+            "payload": json.dumps(payload),
         }
 
         self.query_collection.add(
