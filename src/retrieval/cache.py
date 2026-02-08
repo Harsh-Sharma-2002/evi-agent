@@ -39,12 +39,14 @@ class VectorCache:
 
     def __init__(
         self,
-        similarity_threshold: float = 0.2,
+       query_similarity_threshold: float = 0.75,
+       chunk_similarity_threshold:float = 0.3,
         max_query_items: int = 200,
         ttl_seconds: int = 48 * 3600,
         max_chunks_per_doc: int = 2,  # default updated for 2-chunk design
     ):
-        self.similarity_threshold = similarity_threshold
+        self.query_similarity_threshold = query_similarity_threshold
+        self.chunk_similarity_threshold = chunk_similarity_threshold
         self.max_query_items = max_query_items
         self.ttl_seconds = ttl_seconds
         self.max_chunks_per_doc = max_chunks_per_doc
@@ -100,7 +102,7 @@ class VectorCache:
             similarity = 1.0 - dist
 
             # Monotonic similarity → safe early exit
-            if similarity < self.similarity_threshold:
+            if similarity < self.query_similarity_threshold:
                 break
 
             # Expired → delete and continue
@@ -192,7 +194,7 @@ class VectorCache:
         if self.chunk_collection.count() == 0:
             return []
 
-        threshold = similarity_threshold or self.similarity_threshold
+        threshold = self.chunk_similarity_threshold
 
         results = self.chunk_collection.query(
             query_embeddings=[query_embedding.tolist()],

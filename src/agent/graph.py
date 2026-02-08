@@ -100,9 +100,7 @@ def chunk_store_search_node(state: AgentState, cache: VectorCache) -> AgentState
     # Tier-2 reuse events
     chunk_hits = len(chunks)
     state["chunk_store_hits"] += chunk_hits
-
-    # Conservative API savings: reuse avoids future fetches
-    state["api_calls_saved"] += max(0, chunk_hits - 1)
+    
     # Memory diagnostics
     state["num_anchor_chunks"] = len(chunks)
     state["chunk_store_size"] = cache.chunk_collection.count()
