@@ -17,6 +17,19 @@ def build_final_prompt(state: AgentState, chat_memory: Optional[str] = None, win
     - Produce a single grounded prompt string
     """
 
+    cached = state.get("cache_payload")
+    cached_block = ""
+
+    if cached and cached.get("answer"):
+        cached_block = f"""
+        Previous related answer (REFERENCE ONLY):
+        {cached["answer"]}
+
+        Guidelines:
+        - Do NOT copy the above answer verbatim
+        - Use it only if relevant
+        - Answer the current question independently
+        """.strip()
 
     # Ensure context is expanded (idempotent)
     state = context_expansion_node(state, window_size=window_size)
@@ -67,6 +80,8 @@ Conversation Memory:
 {system_rules}
 
 {memory_block}
+
+{cached_block}
 
 Question:
 {query}

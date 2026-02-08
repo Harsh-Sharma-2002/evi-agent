@@ -33,10 +33,6 @@ def decision_node(state: AgentState) -> AgentState:
     """
      
     # Tier 1: Cache hit → immediate stop
-    if state["cache_hit"]:
-        state["decision"] = "STOP"
-        state["stop_reason"] = "cache_hit"
-        return state
 
     # Hard safety limits (override everything)
     if state["iteration"] >= MAX_ITERATIONS:

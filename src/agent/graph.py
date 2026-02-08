@@ -76,10 +76,11 @@ def query_cache_node(state: AgentState, cache: VectorCache) -> AgentState:
     state["api_calls_saved"] += 1
 
     # Cache data retrieval  
-    _, payload, _ = result
+    _, payload, sim = result
     state["cache_hit"] = True
     state["cache_payload"] = payload
-    state["final_answer"] = payload.get("answer")
+    state["cache_payload"] = payload
+    state["cache_similarity"] = sim
     state["query_cache_size"] = cache.query_collection.count()
     return state
 
@@ -100,7 +101,7 @@ def chunk_store_search_node(state: AgentState, cache: VectorCache) -> AgentState
     # Tier-2 reuse events
     chunk_hits = len(chunks)
     state["chunk_store_hits"] += chunk_hits
-    
+
     # Memory diagnostics
     state["num_anchor_chunks"] = len(chunks)
     state["chunk_store_size"] = cache.chunk_collection.count()
@@ -157,7 +158,7 @@ def cache_write_node(state: AgentState, cache: VectorCache) -> AgentState:
 # =================================================
 
 def route_after_cache(state: AgentState) -> Literal["end", "retrieve"]:
-    return "end" if state["cache_hit"] else "retrieve"
+    return "prompt" if state["cache_hit"] else "retrieve"
 
 
 def route_after_decision(state: AgentState) -> Literal["stop", "fetch"]:
@@ -193,7 +194,7 @@ def build_agent_graph(cache: VectorCache, memory: ChatMemory):
         "cache",
         route_after_cache,
         {
-            "end": END,
+            "prompt": "prompt",
             "retrieve": "retrieve",
         },
     )
